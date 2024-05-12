@@ -1,0 +1,95 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<interface domain="gay.vaskel.Soteria">
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkApplicationWindow" id="window">
+    <property name="resizable">false</property>
+    <property name="modal">true</property>
+    <property name="default-height">250</property>
+    <property name="default-width">450</property>
+    <property name="title">Authorize</property>
+    <child>
+      <object class="GtkBox">
+        <property name="margin-end">56</property>
+        <property name="margin-start">56</property>
+        <property name="orientation">1</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="margin-end">16</property>
+            <property name="margin-start">16</property>
+            <property name="halign">center</property>
+            <property name="justify">fill</property>
+            <property name="label">&lt;b&gt;&lt;span size='x-large'&gt;Authentication Required&lt;/span&gt;&lt;/b&gt;</property>
+            <property name="margin-bottom">12</property>
+            <property name="margin-top">16</property>
+            <property name="use-markup">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="label-message">
+            <property name="single-line-mode">True</property>
+            <property name="wrap">True</property>
+            <property name="margin-bottom">16</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="baseline-position">center</property>
+            <property name="spacing">18</property>
+            <child>
+              <!-- <object class="GtkImage" id="user-icon">
+                <property name="file">/var/lib/AccountsService/icons/skylar</property>
+                <property name="height-request">96</property>
+                <property name="name">user-icon</property>
+                <property name="width-request">64</property>
+              </object> -->
+              <object class="GtkDropDown" id="identity-dropdown">
+                <property name="margin-bottom">8</property>
+                <property name="hexpand">true</property>
+                <property name="model">
+                  <object class="GtkStringList" id="identity-dropdown-values">
+                    <items>
+                    </items>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <!-- <child>
+              <object class="GtkLabel">
+                <property name="label">&lt;span size='x-large'&gt;Skylar&lt;/span&gt;</property>
+                <property name="use-markup">true</property>
+              </object>
+            </child> -->
+          </object>
+        </child>
+        <child>
+          <object class="GtkPasswordEntry" id="password-entry">
+            <property name="hexpand">True</property>
+            <property name="placeholder-text">Password</property>
+            <property name="show-peek-icon">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkFlowBox">
+            <property name="hexpand">true</property>
+            <property name="homogeneous">true</property>
+            <property name="max-children-per-line">2</property>
+            <property name="valign">end</property>
+            <property name="vexpand">True</property>
+            <child>
+              <object class="GtkButton" id="cancel-button">
+                <property name="label">Cancel</property>
+                <!-- <signal name="clicked" handler="cancel_button_clicked" /> -->
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="confirm-button">
+                <property name="label">Authenticate</property>
+                <!-- <signal name="clicked" handler="confirm_button_clicked" /> -->
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

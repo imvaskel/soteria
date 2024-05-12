@@ -1,0 +1,13 @@
+[package]
+edition = "2021"
+name = "soteria"
+version = "0.1.0"
+
+[dependencies]
+etc-passwd = "0.2.0"
+gtk4 = {version = "0.8.2", features = ["v4_10"]}
+serde = {version = "1.0.201", features = ["serde_derive"]}
+tokio = {version = "1.37.0", features = ["full"]}
+tracing = "0.1.40"
+tracing-subscriber = {version = "0.3.18", features = ["std", "fmt", "env-filter", "ansi"]}
+zbus = {version = "4.2.1", default-features = false, features = ["tokio"]}
