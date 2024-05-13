@@ -22,6 +22,8 @@ impl AuthenticationAgent {
     }
 }
 
+static POLKIT_AGENT_HELPER_PATH: &str = env!("POLKIT_AGENT_HELPER_PATH");
+
 #[interface(name = "org.freedesktop.PolicyKit1.AuthenticationAgent")]
 impl AuthenticationAgent {
     async fn cancel_authentication(&self, cookie: &str) {
@@ -74,6 +76,14 @@ impl AuthenticationAgent {
                 .await
                 .map_err(|_| PolkitError::Failed("Failed to recieve data.".to_string()))?
             {
+                AuthenticationEvent::AlreadyRunning(c) => {
+                    if c == cookie {
+                        return Err(PolkitError::Cancelled(
+                            "There is already an ongoing authentication event.".into(),
+                        ));
+                    }
+                }
+
                 AuthenticationEvent::UserCancelled(c) => {
                     if c == cookie {
                         return Err(PolkitError::Cancelled(
@@ -83,18 +93,16 @@ impl AuthenticationAgent {
                 }
                 AuthenticationEvent::UserProvidedPassword(c, user, pw) => {
                     if c == cookie {
-                        let mut child =
-                            process::Command::new("/usr/lib/polkit-1/polkit-agent-helper-1")
-                                .arg(&user)
-                                .stdin(Stdio::piped())
-                                .stdout(Stdio::piped())
-                                .spawn()
-                                .map_err(|_| {
-                                    PolkitError::Failed(
-                                        "Failed to the spawn polkit authentication helper."
-                                            .to_string(),
-                                    )
-                                })?;
+                        let mut child = process::Command::new(POLKIT_AGENT_HELPER_PATH)
+                            .arg(&user)
+                            .stdin(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .map_err(|_| {
+                                PolkitError::Failed(
+                                    "Failed to the spawn polkit authentication helper.".to_string(),
+                                )
+                            })?;
 
                         let mut stdin = child
                             .stdin

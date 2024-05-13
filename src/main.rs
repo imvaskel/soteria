@@ -1,6 +1,7 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
 use gtk::glib::{self, clone, spawn_future_local, SignalHandlerId};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use tokio::sync::broadcast::channel;
 use zbus::zvariant::Value;
@@ -90,8 +91,8 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Registered as authentication provider.");
 
     spawn_future_local(clone!(@weak window, @weak builder => async move {
-        // Mapping of cookie::confirm button listener, cancel button listener
-        let mut registered_listeners: HashMap<String, (SignalHandlerId, SignalHandlerId)> = HashMap::new();
+        let mut current_cookie: Option<String> = None;
+        let mut current_listeners: RefCell<Option<(SignalHandlerId, SignalHandlerId)>> = RefCell::new(None);
 
         loop {
             let dropdown: DropDown = builder.object("identity-dropdown").unwrap();
@@ -102,6 +103,11 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
 
             match event {
                 AuthenticationEvent::Started(cookie, message, names) => {
+                    if current_cookie.as_ref().is_some_and(|c| c != &cookie) {
+                            tx.send(AuthenticationEvent::AlreadyRunning(cookie)).unwrap();
+                            continue;
+                    }
+
                     let store: StringList = builder.object("identity-dropdown-values").unwrap();
                     for name in names.iter() {
                         store.append(name.as_str());
@@ -124,31 +130,33 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                         window.set_visible(false);
                     }));
 
-                    registered_listeners.insert(cookie.clone(), (confirm_listener, cancel_listener));
+                    current_listeners = RefCell::new(Some((confirm_listener, cancel_listener)));
+                    current_cookie = Some(cookie.clone());
                     tracing::debug!("Attempting to prompt user for authentication.");
                     window.present();
                 }
                 AuthenticationEvent::Cancelled(c) => {
-                    match registered_listeners.remove(&c) {
-                        Some((confirm, cancel)) => {
-                            cancel_button.disconnect(cancel);
-                            confirm_button.disconnect(confirm);
-                            tracing::debug!("removed listeners from buttons.");
+                    if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
+                        current_cookie = None;
+                        if let Some((con, can)) = current_listeners.take() {
+                            cancel_button.disconnect(can);
+                            confirm_button.disconnect(con);
                         }
-                        None => tracing::debug!("have cookie that was not registered to any listeners.")
+                        window.set_visible(false);
                     }
 
-                    window.set_visible(false);
+
                 },
                 AuthenticationEvent::UserProvidedPassword(c, _, _) => {
-                    match registered_listeners.remove(&c) {
-                        Some((confirm, cancel)) => {
-                            cancel_button.disconnect(cancel);
-                            confirm_button.disconnect(confirm);
-                            tracing::debug!("removed listeners from buttons.");
+                    if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
+                        current_cookie = None;
+                        if let Some((con, can)) = current_listeners.take() {
+                            cancel_button.disconnect(can);
+                            confirm_button.disconnect(con);
                         }
-                        None => tracing::debug!("have cookie that was not registered to any listeners.")
+                        window.set_visible(false);
                     }
+
                 }
                 AuthenticationEvent::AuthorizationFailed(_) => {
                     failed_alert.show(Some(&window));

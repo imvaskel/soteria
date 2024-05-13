@@ -18,7 +18,13 @@ Soteria requires GTK >= 4.10. For Arch based distros, you will need
 based distros will need `gtk4-devel`.
 
 Additionally, you will need `polkit` and `libpolkit-agent` installed.
-(`libpolkit-agent` should be shipped with `polkit`)
+(`libpolkit-agent` should be shipped with `polkit`).
+
+
+> [!NOTE]
+> If the executable `polkit-agent-helper-1`
+> is in a non-standard location (i.e. not `/usr/lib/polkit/> polkit-agent-helper-1`), then you should also pass the environment variable
+> `POLKIT_AGENT_HELPER_PATH` when compiling.
 
 Soteria will also need Rust. It was developed on Rust `1.78.0` however,
 lower versions of Rust should still work.
@@ -26,7 +32,7 @@ lower versions of Rust should still work.
 Run the following commmand to build and install Soteria:
 
 ```bash
-        cargo install --locked --git https://github.com/imvaskel/soteria
+cargo install --locked --git https://github.com/imvaskel/soteria
 ```
 
 This should place Soteria into ~/.cargo/bin and you can run it from there.

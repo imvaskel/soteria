@@ -10,4 +10,6 @@ pub enum AuthenticationEvent {
     UserProvidedPassword(String, String, String),
     /// Authorization failed for some reason.
     AuthorizationFailed(String),
+    /// There is already an authentication event being handled.
+    AlreadyRunning(String),
 }
