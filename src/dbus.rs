@@ -8,21 +8,21 @@ use zbus::{interface, zvariant::Value};
 
 use crate::{
     authority::{Identity, PolkitError, Result},
+    config::SystemConfig,
     events::AuthenticationEvent,
 };
 
 #[derive(Debug)]
 pub struct AuthenticationAgent {
+    config: SystemConfig,
     sender: broadcast::Sender<AuthenticationEvent>,
 }
 
 impl AuthenticationAgent {
-    pub fn new(sender: broadcast::Sender<AuthenticationEvent>) -> Self {
-        Self { sender }
+    pub fn new(sender: broadcast::Sender<AuthenticationEvent>, config: SystemConfig) -> Self {
+        Self { sender, config }
     }
 }
-
-static POLKIT_AGENT_HELPER_PATH: &str = env!("POLKIT_AGENT_HELPER_PATH");
 
 #[interface(name = "org.freedesktop.PolicyKit1.AuthenticationAgent")]
 impl AuthenticationAgent {
@@ -99,7 +99,7 @@ impl AuthenticationAgent {
                     password: pw,
                 } => {
                     if c == cookie {
-                        let mut child = process::Command::new(POLKIT_AGENT_HELPER_PATH)
+                        let mut child = process::Command::new(self.config.get_helper_path())
                             .arg(&user)
                             .stdin(Stdio::piped())
                             .stdout(Stdio::piped())

@@ -1,5 +1,7 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
+use figment::providers::{Format, Serialized, Toml};
+use figment::Figment;
 use gtk::glib::{self, clone, spawn_future_local, SignalHandlerId};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,9 +16,11 @@ use gtk::{
 use gtk4 as gtk;
 use zbus::conn;
 
+use crate::config::SystemConfig;
 use crate::events::AuthenticationEvent;
 
 mod authority;
+mod config;
 mod constants;
 mod dbus;
 mod events;
@@ -27,11 +31,8 @@ async fn main() {
     let subscriber = tracing_subscriber::fmt()
         .with_target(false)
         .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env().add_directive(
-                "zbus::object_server::ObjectServer::start_object_server[start_object_server]=debug"
-                    .parse()
-                    .unwrap(),
-            ),
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("[start_object_server]=debug".parse().unwrap()),
         )
         .finish();
     tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -45,6 +46,29 @@ async fn main() {
     }
 }
 async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
+    let config: SystemConfig = Figment::new()
+        .merge(Serialized::defaults(SystemConfig::default()))
+        .merge(Toml::file_exact("/etc/soteria/config.toml"))
+        .extract().or_else(|e| {
+            match e.kind {
+                figment::error::Kind::Message(ref s) => {
+                    if s.starts_with("No such file or directory") {
+                        tracing::warn!("Could not find a configuration file at /etc/soteria/config.toml, proceeding with a default configuration.");
+                        Ok(SystemConfig::default())
+                    }
+                    else {
+                        Err(e)
+                    }
+                }
+                _ => Err(e)
+            }
+        })?;
+
+    tracing::info!(
+        "using authentication helper located at {}",
+        config.get_helper_path()
+    );
+
     gtk::init()?;
 
     let application = Application::builder()
@@ -59,10 +83,9 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     let confirm_button: Button = ui::get_object(&builder, "confirm-button")?;
     let info_label: Label = ui::get_object(&builder, "label-message")?;
 
-    let w2 = window.clone();
-    application.connect_activate(move |app| {
-        app.add_window(&w2);
-    });
+    application.connect_activate(clone!(@weak window => move |app| {
+        app.add_window(&window);
+    }));
 
     let (tx, mut rx) = channel::<AuthenticationEvent>(100);
 
@@ -77,7 +100,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     application.register(Cancellable::NONE)?;
     application.activate();
 
-    let agent = AuthenticationAgent::new(tx.clone());
+    let agent = AuthenticationAgent::new(tx.clone(), config.clone());
     let connection = conn::Builder::system()?
         .serve_at(constants::SELF_OBJECT_PATH, agent)?
         .build()
@@ -92,7 +115,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
 
     spawn_future_local(clone!(@weak window, @weak builder => async move {
         let mut current_cookie: Option<String> = None;
-        let mut current_listeners: RefCell<Option<(SignalHandlerId, SignalHandlerId)>> = RefCell::new(None);
+        let mut current_listeners: RefCell<Option<(SignalHandlerId, SignalHandlerId, SignalHandlerId)>> = RefCell::new(None);
 
         loop {
             let dropdown: DropDown = builder.object("identity-dropdown").unwrap();
@@ -114,6 +137,12 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     info_label.set_label(&message);
 
+                    let close_listener = window.connect_hide_on_close_notify(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
+                        tx.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone()}).unwrap();
+                        password_entry.set_text("");
+                        info_label.set_text("");
+                    }));
+
                     let cancel_listener = cancel_button.connect_clicked(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
                         tx.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone()}).unwrap();
                         password_entry.set_text("");
@@ -130,7 +159,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                         window.set_visible(false);
                     }));
 
-                    current_listeners = RefCell::new(Some((confirm_listener, cancel_listener)));
+                    current_listeners = RefCell::new(Some((confirm_listener, cancel_listener, close_listener)));
                     current_cookie = Some(cookie.clone());
                     tracing::debug!("Attempting to prompt user for authentication.");
                     window.present();
@@ -138,9 +167,10 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                 AuthenticationEvent::Canceled{cookie: c} => {
                     if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
                         current_cookie = None;
-                        if let Some((con, can)) = current_listeners.take() {
+                        if let Some((con, can, close)) = current_listeners.take() {
                             cancel_button.disconnect(can);
                             confirm_button.disconnect(con);
+                            window.disconnect(close);
                         }
                         window.set_visible(false);
                     }
@@ -150,9 +180,10 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                 AuthenticationEvent::UserProvidedPassword{ cookie: c, username: _, password: _} => {
                     if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
                         current_cookie = None;
-                        if let Some((con, can)) = current_listeners.take() {
+                        if let Some((con, can, close)) = current_listeners.take() {
                             cancel_button.disconnect(can);
                             confirm_button.disconnect(con);
+                            window.disconnect(close);
                         }
                         window.set_visible(false);
                     }
