@@ -29,8 +29,10 @@ impl AuthenticationAgent {
     async fn cancel_authentication(&self, cookie: &str) {
         tracing::debug!("Recieved request to cancel authentication for {}", cookie);
         let tx = self.sender.clone();
-        tx.send(AuthenticationEvent::Cancelled(cookie.to_owned()))
-            .unwrap();
+        tx.send(AuthenticationEvent::Canceled {
+            cookie: cookie.to_owned(),
+        })
+        .unwrap();
     }
 
     async fn begin_authentication(
@@ -61,11 +63,11 @@ impl AuthenticationAgent {
         }
 
         self.sender
-            .send(AuthenticationEvent::Started(
-                cookie.to_string(),
-                message.to_string(),
+            .send(AuthenticationEvent::Started {
+                cookie: cookie.to_string(),
+                message: message.to_string(),
                 names,
-            ))
+            })
             .map_err(|_| PolkitError::Failed("Failed to send data.".to_string()))?;
 
         let mut rx = self.sender.subscribe();
@@ -76,7 +78,7 @@ impl AuthenticationAgent {
                 .await
                 .map_err(|_| PolkitError::Failed("Failed to recieve data.".to_string()))?
             {
-                AuthenticationEvent::AlreadyRunning(c) => {
+                AuthenticationEvent::AlreadyRunning { cookie: c } => {
                     if c == cookie {
                         return Err(PolkitError::Cancelled(
                             "There is already an ongoing authentication event.".into(),
@@ -84,14 +86,18 @@ impl AuthenticationAgent {
                     }
                 }
 
-                AuthenticationEvent::UserCancelled(c) => {
+                AuthenticationEvent::UserCanceled { cookie: c } => {
                     if c == cookie {
                         return Err(PolkitError::Cancelled(
                             "User cancelled the authentication.".to_string(),
                         ));
                     }
                 }
-                AuthenticationEvent::UserProvidedPassword(c, user, pw) => {
+                AuthenticationEvent::UserProvidedPassword {
+                    cookie: c,
+                    username: user,
+                    password: pw,
+                } => {
                     if c == cookie {
                         let mut child = process::Command::new(POLKIT_AGENT_HELPER_PATH)
                             .arg(&user)
@@ -129,9 +135,9 @@ impl AuthenticationAgent {
                             } else if line.starts_with("FAILURE") {
                                 tracing::debug!("helper replied with failure.");
                                 self.sender
-                                    .send(AuthenticationEvent::AuthorizationFailed(
-                                        cookie.to_string(),
-                                    ))
+                                    .send(AuthenticationEvent::AuthorizationFailed {
+                                        cookie: cookie.to_string(),
+                                    })
                                     .unwrap();
                                 Err(PolkitError::NotAuthorized("".into()))?;
                             } else if line.starts_with("SUCCESS") {

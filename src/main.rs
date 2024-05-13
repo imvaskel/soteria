@@ -102,9 +102,9 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
             tracing::debug!("recieved event {:#?}", event);
 
             match event {
-                AuthenticationEvent::Started(cookie, message, names) => {
+                AuthenticationEvent::Started{cookie, message, names} => {
                     if current_cookie.as_ref().is_some_and(|c| c != &cookie) {
-                            tx.send(AuthenticationEvent::AlreadyRunning(cookie)).unwrap();
+                            tx.send(AuthenticationEvent::AlreadyRunning{cookie}).unwrap();
                             continue;
                     }
 
@@ -115,7 +115,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     info_label.set_label(&message);
 
                     let cancel_listener = cancel_button.connect_clicked(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
-                        tx.send(AuthenticationEvent::UserCancelled(cookie.clone())).unwrap();
+                        tx.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone()}).unwrap();
                         password_entry.set_text("");
                         info_label.set_text("");
                         window.set_visible(false);
@@ -124,7 +124,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     let confirm_listener = confirm_button.connect_clicked(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
                         let pw = password_entry.text();
                         let user: StringObject = dropdown.selected_item().unwrap().dynamic_cast().unwrap();
-                        tx.send(AuthenticationEvent::UserProvidedPassword(cookie.clone(), user.string().to_string(), pw.to_string())).unwrap();
+                        tx.send(AuthenticationEvent::UserProvidedPassword { cookie: cookie.clone(), username: user.string().to_string(), password: pw.to_string()}).unwrap();
                         password_entry.set_text("");
                         info_label.set_text("");
                         window.set_visible(false);
@@ -135,7 +135,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     tracing::debug!("Attempting to prompt user for authentication.");
                     window.present();
                 }
-                AuthenticationEvent::Cancelled(c) => {
+                AuthenticationEvent::Canceled{cookie: c} => {
                     if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
                         current_cookie = None;
                         if let Some((con, can)) = current_listeners.take() {
@@ -147,7 +147,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
 
 
                 },
-                AuthenticationEvent::UserProvidedPassword(c, _, _) => {
+                AuthenticationEvent::UserProvidedPassword{ cookie: c, username: _, password: _} => {
                     if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
                         current_cookie = None;
                         if let Some((con, can)) = current_listeners.take() {
@@ -158,7 +158,7 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                 }
-                AuthenticationEvent::AuthorizationFailed(_) => {
+                AuthenticationEvent::AuthorizationFailed{cookie: _} => {
                     failed_alert.show(Some(&window));
                 }
                 _ => (),
