@@ -1,7 +1,5 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use figment::providers::{Format, Serialized, Toml};
-use figment::Figment;
 use gtk::glib::{self, clone, spawn_future_local, SignalHandlerId};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -46,23 +44,7 @@ async fn main() {
     }
 }
 async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
-    let config: SystemConfig = Figment::new()
-        .merge(Serialized::defaults(SystemConfig::default()))
-        .merge(Toml::file_exact("/etc/soteria/config.toml"))
-        .extract().or_else(|e| {
-            match e.kind {
-                figment::error::Kind::Message(ref s) => {
-                    if s.starts_with("No such file or directory") {
-                        tracing::warn!("Could not find a configuration file at /etc/soteria/config.toml, proceeding with a default configuration.");
-                        Ok(SystemConfig::default())
-                    }
-                    else {
-                        Err(e)
-                    }
-                }
-                _ => Err(e)
-            }
-        })?;
+    let config: SystemConfig = SystemConfig::from_file()?;
 
     tracing::info!(
         "using authentication helper located at {}",

@@ -23,8 +23,12 @@ Additionally, you will need `polkit` and `libpolkit-agent` installed.
 
 > [!NOTE]
 > If the executable `polkit-agent-helper-1`
-> is in a non-standard location (i.e. not `/usr/lib/polkit/> polkit-agent-helper-1`), then you should also pass the environment variable
-> `POLKIT_AGENT_HELPER_PATH` when compiling.
+> is in a non-standard location (i.e. not `/usr/lib/polkit/polkit-agent-helper-1`), then you should also set up a configuration file
+> at either ``/usr/local/etc/soteria/config.toml`` or ``/etc/soteria/config.toml`` with
+> ```toml
+> helper_path = "/path/to/your/helper"
+> ```
+> as the contents.
 
 Soteria will also need Rust. It was developed on Rust `1.78.0` however,
 lower versions of Rust should still work.
