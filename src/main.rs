@@ -4,6 +4,7 @@ use gtk::glib::{self, clone, spawn_future_local, SignalHandlerId};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use tokio::sync::broadcast::channel;
+use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
 
 use gtk::{gio::Cancellable, prelude::*, Builder};
@@ -29,7 +30,9 @@ async fn main() {
     let subscriber = tracing_subscriber::fmt()
         .with_target(false)
         .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy()
                 .add_directive("[start_object_server]=debug".parse().unwrap()),
         )
         .finish();
