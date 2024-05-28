@@ -122,6 +122,10 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     info_label.set_label(&message);
 
+                    password_entry.connect_activate(clone!(@weak confirm_button => move |_| {
+                        confirm_button.emit_clicked();
+                    }));
+
                     let close_listener = window.connect_hide_on_close_notify(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
                         tx.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone()}).unwrap();
                         password_entry.set_text("");
