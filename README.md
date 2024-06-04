@@ -51,6 +51,14 @@ For Hyprland, this would look like:
 exec-once = /path/to/soteria
 ```
 
+You may also like:
+
+```conf
+windowrulev2=pin,class:gay.vaskel.Soteria
+```
+
+This makes sure that Soteria stays pinned to your current workspace.
+
 Other desktop environments should be similiar.
 
 ## Why?
