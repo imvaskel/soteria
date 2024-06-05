@@ -40,7 +40,7 @@ impl SystemConfig {
 impl Default for SystemConfig {
     fn default() -> Self {
         Self {
-            helper_path: "/usr/lib/polkit-1/polkit-agent-helper-1".into(),
+            helper_path: env!("POLKIT_AGENT_HELPER_PATH").into(),
         }
     }
 }
