@@ -4,6 +4,9 @@
 
 Soteria is a Polkit authentication agent written in GTK designed to be used with any desktop environment.
 
+<img alt="Example authentication popup" src=".github/example_popup.png" width=50% height=50% ></image>
+<img alt="Failed authentication popup" src=".github/example_failed.png" width=50% height=50% ></image>
+
 [Installation](#installation) •
 [Why?](#why) •
 [Configuration](#configuration) •
