@@ -136,7 +136,8 @@ async fn main() -> Result<()> {
                 AuthenticationEvent::UserProvidedPassword{ cookie: c, username: _, password: _} => {
                     state.end_authentication(&c);
                 }
-                AuthenticationEvent::AuthorizationFailed{cookie: _} => {
+                AuthenticationEvent::AuthorizationFailed{cookie: c} => {
+                    state.end_authentication(&c);
                     failed_alert.show(Some(&window));
                 }
                 _ => (),

@@ -20,8 +20,8 @@ pub enum AuthenticationEvent {
     },
     /// Authorization failed for some reason.
     AuthorizationFailed { cookie: String },
-    /// There is already an authentication event being handled.
-    AlreadyRunning { cookie: String },
+    // There is already an authentication event being handled.
+    //AlreadyRunning { cookie: String },
 }
 
 // Recursive expansion of Debug macro
@@ -58,10 +58,10 @@ impl Debug for AuthenticationEvent {
                 .debug_struct("AuthorizationFailed")
                 .field("cookie", &cookie)
                 .finish(),
-            AuthenticationEvent::AlreadyRunning { cookie } => f
-                .debug_struct("AlreadyRunning")
-                .field("cookie", &cookie)
-                .finish(),
+            // AuthenticationEvent::AlreadyRunning { cookie } => f
+            //     .debug_struct("AlreadyRunning")
+            //     .field("cookie", &cookie)
+            //     .finish(),
         }
     }
 }

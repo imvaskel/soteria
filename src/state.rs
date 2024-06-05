@@ -60,12 +60,13 @@ impl State {
     }
 
     pub fn start_authentication(&mut self, cookie: String) -> Result<bool> {
-        if self.cookie.is_some() {
-            self.sender.send(AuthenticationEvent::AlreadyRunning {
-                cookie: cookie.clone(),
-            })?;
-            return Ok(false);
-        }
+        // if self.cookie.is_some() {
+        //     tracing::debug!("recieved request to authenticate and we are already running with cookie {:?}", self.cookie);
+        //     self.sender.send(AuthenticationEvent::AlreadyRunning {
+        //         cookie: cookie.clone(),
+        //     })?;
+        //     return Ok(false);
+        // }
 
         self.cookie = Some(cookie);
 
