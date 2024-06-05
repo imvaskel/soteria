@@ -1,5 +1,5 @@
 {
-  description = "A very basic flake";
+  description = "A gtk-based polkit authentication agent.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
