@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use eyre::Result;
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment,
@@ -12,24 +13,22 @@ pub struct SystemConfig {
 }
 
 impl SystemConfig {
-    pub fn from_file() -> Result<Self, figment::Error> {
+    pub fn from_file() -> Result<Self> {
         let mut fig = Figment::new();
         // Prioritize configuration in local, as semantically that is the users config
         if Path::new("/usr/local/etc/soteria/config.toml").exists() {
             fig = fig.merge(Toml::file_exact("/usr/local/etc/soteria/config.toml"));
-            tracing::info!(
-                "found configuration at /usr/local/etc/soteria/config.toml, using that."
-            );
+            tracing::info!("using configuration file found at /usr/local/etc/soteria/config.toml");
         // Try the configuration location of the distro
         } else if Path::new("/etc/soteria/config.toml").exists() {
             fig = fig.merge(Toml::file_exact("/etc/soteria/config.toml"));
-            tracing::info!("found configuration at /etc/soteria/config.toml, using that.");
+            tracing::info!("using configuration file found at /etc/soteria/config.toml");
         // Fall back to default
         } else {
             fig = fig.merge(Serialized::defaults(Self::default()));
-            tracing::info!("could not find configuration, using default instead.");
+            tracing::info!("no configuration file found, using default configuration instead");
         }
-        fig.extract()
+        Ok(fig.extract()?)
     }
 
     pub fn get_helper_path(&self) -> &str {

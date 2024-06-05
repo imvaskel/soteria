@@ -1,17 +1,16 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use gtk::glib::{self, clone, spawn_future_local, SignalHandlerId};
-use std::cell::RefCell;
+use eyre::{ensure, Result};
+use gtk::glib::{self, clone, spawn_future_local};
+use state::State;
 use std::collections::HashMap;
+use std::path::Path;
 use tokio::sync::broadcast::channel;
 use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
 
 use gtk::{gio::Cancellable, prelude::*, Builder};
-use gtk::{
-    Application, ApplicationWindow, Button, DropDown, Label, PasswordEntry, StringList,
-    StringObject,
-};
+use gtk::{Application, ApplicationWindow, Button, DropDown, Label, PasswordEntry, StringList};
 use gtk4 as gtk;
 use zbus::conn;
 
@@ -23,32 +22,35 @@ mod config;
 mod constants;
 mod dbus;
 mod events;
+mod state;
 mod ui;
 
-#[tokio::main]
-async fn main() {
+fn setup_tracing() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
         .with_target(false)
         .with_env_filter(
             tracing_subscriber::EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
                 .from_env_lossy()
-                .add_directive("[start_object_server]=debug".parse().unwrap()),
+                .add_directive("[start_object_server]=debug".parse()?),
         )
         .finish();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+    tracing::subscriber::set_global_default(subscriber)?;
 
-    match real_main().await {
-        Ok(_) => (),
-        Err(e) => {
-            tracing::error!("A fatal error occurred when running the application: {}", e);
-            std::process::exit(1);
-        }
-    }
+    Ok(())
 }
-async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    setup_tracing()?;
+
     let config: SystemConfig = SystemConfig::from_file()?;
 
+    ensure!(
+        Path::new(config.get_helper_path()).exists(),
+        "Authentication helper located at {} does not exist.",
+        config.get_helper_path()
+    );
     tracing::info!(
         "using authentication helper located at {}",
         config.get_helper_path()
@@ -67,9 +69,14 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     let cancel_button: Button = ui::get_object(&builder, "cancel-button")?;
     let confirm_button: Button = ui::get_object(&builder, "confirm-button")?;
     let info_label: Label = ui::get_object(&builder, "label-message")?;
+    let dropdown: DropDown = ui::get_object(&builder, "identity-dropdown")?;
 
     application.connect_activate(clone!(@weak window => move |app| {
         app.add_window(&window);
+    }));
+
+    password_entry.connect_activate(clone!(@weak confirm_button => move |_| {
+        confirm_button.emit_clicked();
     }));
 
     let (tx, mut rx) = channel::<AuthenticationEvent>(100);
@@ -99,11 +106,9 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Registered as authentication provider.");
 
     spawn_future_local(clone!(@weak window, @weak builder => async move {
-        let mut current_cookie: Option<String> = None;
-        let mut current_listeners: RefCell<Option<(SignalHandlerId, SignalHandlerId, SignalHandlerId)>> = RefCell::new(None);
+        let mut state = State::new(tx.clone(), cancel_button.clone(), confirm_button.clone(), password_entry.clone(), window.clone(), dropdown.clone());
 
         loop {
-            let dropdown: DropDown = builder.object("identity-dropdown").unwrap();
             let failed_alert = ui::build_fail_alert();
 
             let event = rx.recv().await.expect("Somehow the channel closed.");
@@ -111,9 +116,9 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
 
             match event {
                 AuthenticationEvent::Started{cookie, message, names} => {
-                    if current_cookie.as_ref().is_some_and(|c| c != &cookie) {
-                            tx.send(AuthenticationEvent::AlreadyRunning{cookie}).unwrap();
-                            continue;
+                    let res = state.start_authentication(cookie).unwrap();
+                    if !res {
+                        continue;
                     }
 
                     let store: StringList = builder.object("identity-dropdown-values").unwrap();
@@ -122,61 +127,14 @@ async fn real_main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     info_label.set_label(&message);
 
-                    password_entry.connect_activate(clone!(@weak confirm_button => move |_| {
-                        confirm_button.emit_clicked();
-                    }));
-
-                    let close_listener = window.connect_hide_on_close_notify(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
-                        tx.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone()}).unwrap();
-                        password_entry.set_text("");
-                        info_label.set_text("");
-                    }));
-
-                    let cancel_listener = cancel_button.connect_clicked(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
-                        tx.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone()}).unwrap();
-                        password_entry.set_text("");
-                        info_label.set_text("");
-                        window.set_visible(false);
-                    }));
-
-                    let confirm_listener = confirm_button.connect_clicked(clone!(@weak window, @weak password_entry, @weak info_label, @strong cookie, @strong tx => move |_| {
-                        let pw = password_entry.text();
-                        let user: StringObject = dropdown.selected_item().unwrap().dynamic_cast().unwrap();
-                        tx.send(AuthenticationEvent::UserProvidedPassword { cookie: cookie.clone(), username: user.string().to_string(), password: pw.to_string()}).unwrap();
-                        password_entry.set_text("");
-                        info_label.set_text("");
-                        window.set_visible(false);
-                    }));
-
-                    current_listeners = RefCell::new(Some((confirm_listener, cancel_listener, close_listener)));
-                    current_cookie = Some(cookie.clone());
                     tracing::debug!("Attempting to prompt user for authentication.");
                     window.present();
                 }
                 AuthenticationEvent::Canceled{cookie: c} => {
-                    if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
-                        current_cookie = None;
-                        if let Some((con, can, close)) = current_listeners.take() {
-                            cancel_button.disconnect(can);
-                            confirm_button.disconnect(con);
-                            window.disconnect(close);
-                        }
-                        window.set_visible(false);
-                    }
-
-
+                    state.end_authentication(&c);
                 },
                 AuthenticationEvent::UserProvidedPassword{ cookie: c, username: _, password: _} => {
-                    if current_cookie.as_ref().is_some_and(|cc| cc == &c) {
-                        current_cookie = None;
-                        if let Some((con, can, close)) = current_listeners.take() {
-                            cancel_button.disconnect(can);
-                            confirm_button.disconnect(con);
-                            window.disconnect(close);
-                        }
-                        window.set_visible(false);
-                    }
-
+                    state.end_authentication(&c);
                 }
                 AuthenticationEvent::AuthorizationFailed{cookie: _} => {
                     failed_alert.show(Some(&window));
