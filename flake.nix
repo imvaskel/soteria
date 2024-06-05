@@ -10,25 +10,21 @@
     nixpkgs,
   }: let
     supportedSystems = ["x86_64-linux"];
-    eachSystem = nixpkgs.lib.genAttrs supportedSystems;
+    eachSystem = f:
+      nixpkgs.lib.genAttrs supportedSystems
+      (system: f nixpkgs.legacyPackages.${system});
   in {
-    packages = eachSystem (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
-    in {
-      soteria = pkgs.callPackage ./default.nix {};
-      default = self.packages.${system}.soteria;
+    packages = eachSystem (pkgs: import ./. {inherit pkgs;});
+    devShells = eachSystem (pkgs: {
+      default = pkgs.mkShell (let
+        soteria = self.packages.${pkgs.system}.default;
+      in {
+        inputsFrom = [soteria];
+        packages = builtins.attrValues {
+          inherit (pkgs) rust-analyzer rustfmt;
+        };
+      });
     });
-
-    devShell = eachSystem (system: let pkgs = nixpkgs.legacyPackages.${system}; in pkgs.mkShell {
-      packages = with pkgs; [
-        gtk4
-        glib
-        polkit
-        pkg-config
-        cargo
-      ];
-    });
-
-    formatter = eachSystem (system: nixpkgs.legacyPackages.${system}.alejandra);
+    formatter = eachSystem (pkgs: pkgs.alejandra);
   };
 }
