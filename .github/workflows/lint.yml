@@ -11,12 +11,18 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      - name: "Install build dependencies"
+        id: install-deps
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install pkg-config libgtk-4-dev
 
       - name: "Run cargo fmt"
         id: cargo-fmt
@@ -26,7 +32,6 @@ jobs:
       - name: "Run cargo clippy"
         id: cargo-clippy
         run: |
-          sudo apt-get -y install pkg-config libgtk-4-dev
           cargo clippy -- -Dwarnings
 
 
