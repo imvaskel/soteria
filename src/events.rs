@@ -58,10 +58,6 @@ impl Debug for AuthenticationEvent {
                 .debug_struct("AuthorizationFailed")
                 .field("cookie", &cookie)
                 .finish(),
-            // AuthenticationEvent::AlreadyRunning { cookie } => f
-            //     .debug_struct("AlreadyRunning")
-            //     .field("cookie", &cookie)
-            //     .finish(),
         }
     }
 }

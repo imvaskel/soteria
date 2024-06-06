@@ -78,13 +78,6 @@ impl AuthenticationAgent {
                 .await
                 .map_err(|_| PolkitError::Failed("Failed to recieve data.".to_string()))?
             {
-                // AuthenticationEvent::AlreadyRunning { cookie: c } => {
-                //     if c == cookie {
-                //         return Err(PolkitError::Cancelled(
-                //             "There is already an ongoing authentication event.".into(),
-                //         ));
-                //     }
-                // }
                 AuthenticationEvent::UserCanceled { cookie: c } => {
                     if c == cookie {
                         return Err(PolkitError::Cancelled(
