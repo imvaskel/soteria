@@ -26,6 +26,7 @@ jobs:
       - name: "Run cargo clippy"
         id: cargo-clippy
         run: |
+          sudo apt-get -y install pkg-config libgtk-4-dev
           cargo clippy -- -Dwarnings
 
 
