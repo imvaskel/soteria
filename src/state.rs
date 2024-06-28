@@ -11,6 +11,7 @@ use crate::events::AuthenticationEvent;
 #[derive(Debug)]
 struct ComponentSignals {
     window_close: SignalHandlerId,
+    window_close_request: SignalHandlerId,
     cancel_button_clicked: SignalHandlerId,
     confirm_button_clicked: SignalHandlerId,
 }
@@ -67,6 +68,13 @@ impl State {
             components.password_entry.set_text("");
         }));
 
+        let window_close_request = self.components.window.connect_close_request(clone!(@strong self.sender as sender, @strong self.components as components, @strong self.cookie as cookie => move |_| {
+            sender.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone().unwrap()}).unwrap();
+            components.password_entry.set_text("");
+
+            gtk4::glib::Propagation::Proceed
+        }));
+
         let cancel_button_clicked = self.components.cancel_button.connect_clicked(clone!(@strong self.sender as sender, @strong self.components as components, @strong self.cookie as cookie=> move |_| {
             sender.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone().unwrap()}).unwrap();
             components.password_entry.set_text("");
@@ -83,6 +91,7 @@ impl State {
 
         self.signals = Some(ComponentSignals {
             window_close,
+            window_close_request,
             cancel_button_clicked,
             confirm_button_clicked,
         });
@@ -98,6 +107,7 @@ impl State {
                     window_close,
                     cancel_button_clicked,
                     confirm_button_clicked,
+                    window_close_request,
                 }) = self.signals.take()
                 {
                     self.components
@@ -107,6 +117,7 @@ impl State {
                         .confirm_button
                         .disconnect(confirm_button_clicked);
                     self.components.window.disconnect(window_close);
+                    self.components.window.disconnect(window_close_request);
                 }
                 self.cookie = None;
             }
