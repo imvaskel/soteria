@@ -14,7 +14,7 @@ where
 
 pub fn build_fail_alert() -> AlertDialog {
     AlertDialog::builder()
-        .message("Authorization failed for some reason. Check your login details and try again.")
+        .message("Authentication failed for some reason. Check your login details and try again.")
         .buttons(vec!["Ok"])
         .build()
 }
