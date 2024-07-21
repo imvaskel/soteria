@@ -72,6 +72,7 @@
       soteria = craneLib.buildPackage (commonArgs
         // {
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          meta.mainProgram = "soteria";
 
           # Additional environment variables or build phases/hooks can be set
           # here *without* rebuilding all dependency crates
