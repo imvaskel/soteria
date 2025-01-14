@@ -5,6 +5,7 @@ use gtk::glib::{self, clone, spawn_future_local};
 use state::State;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::SystemTime;
 use tokio::sync::broadcast::channel;
 use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
@@ -81,12 +82,23 @@ async fn main() -> Result<()> {
 
     let (tx, mut rx) = channel::<AuthenticationEvent>(100);
 
-    let locale = "en_US.UTF-8";
-    let subject_kind = "unix-session".to_string();
-    let subject_details = HashMap::from([(
-        "session-id".to_string(),
-        Value::new(std::env::var("XDG_SESSION_ID")?),
-    )]);
+    // Docs say that there are a couple of options for registering ourselves subject
+    // wise. Users are having problems with XDG_SESSION_ID not being
+    // set on certain desktop environments, so unix-process seems to be preferred
+    // (referencing other implementations)
+    let locale = "en_US.UTF-8"; // TODO: Needed?
+    let subject_kind = "unix-process".to_string();
+    let subject_details = HashMap::from([
+        ("pid".to_string(), Value::new(std::process::id())),
+        (
+            "start-time".to_string(),
+            Value::new(
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .as_millis() as u64,
+            ),
+        ),
+    ]);
     let subject = Subject::new(subject_kind, subject_details);
 
     application.register(Cancellable::NONE)?;
