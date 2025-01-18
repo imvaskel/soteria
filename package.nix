@@ -1,44 +1,21 @@
 {
-  rustPlatform,
-  gtk4,
-  glib,
-  polkit,
+  craneLib,
   lib,
+  stdenv,
   pkg-config,
-  binutils,
+  wrapGAppsHook4,
+  cairo,
+  gdk-pixbuf,
+  glib,
+  gtk4,
+  pango,
+  polkit,
+  libiconv,
+  ...
 }: let
-  inherit
-    (lib.fileset)
-    toSource
-    gitTracked
-    difference
-    unions
-    fileFilter
-    ;
+  inherit (lib.fileset) toSource difference gitTracked unions fileFilter;
 in
-  rustPlatform.buildRustPackage {
-    pname = "soteria";
-    version = "0.1.0";
-
-    nativeBuildInputs = [
-      pkg-config
-      binutils
-    ];
-
-    buildInputs = [
-      gtk4
-      glib
-      polkit
-    ];
-
-    # Takes advantage of nixpkgs manually editing PACKAGE_PREFIX by grabbing it from
-    # the binary itself.
-    # https://github.com/NixOS/nixpkgs/blob/9b5328b7f761a7bbdc0e332ac4cf076a3eedb89b/pkgs/development/libraries/polkit/default.nix#L142
-    # https://github.com/polkit-org/polkit/blob/d89c3604e2a86f4904566896c89e1e6b037a6f50/src/polkitagent/polkitagentsession.c#L599
-    preBuild = ''
-      export POLKIT_AGENT_HELPER_PATH="$(strings ${polkit.out}/lib/libpolkit-agent-1.so | grep "polkit-agent-helper-1")"
-    '';
-
+  craneLib.buildPackage {
     src = toSource {
       root = ./.;
       fileset =
@@ -48,13 +25,39 @@ in
           (fileFilter (file: file.hasExt "nix") ./.)
         ]);
     };
+    strictDeps = true;
 
-    cargoLock.lockFile = ./Cargo.lock;
+    nativeBuildInputs = [
+      pkg-config
+      wrapGAppsHook4
+    ];
+
+    buildInputs =
+      [
+        cairo
+        gdk-pixbuf
+        glib
+        gtk4
+        pango
+      ]
+      ++ lib.optionals stdenv.isDarwin [
+        libiconv
+      ];
+
+    #  Takes advantage of nixpkgs manually editing PACKAGE_PREFIX by grabbing it from
+    #  the binary itself.
+    #  https://github.com/NixOS/nixpkgs/blob/9b5328b7f761a7bbdc0e332ac4cf076a3eedb89b/pkgs/development/libraries/polkit/default.nix#L142
+    #  https://github.com/polkit-org/polkit/blob/d89c3604e2a86f4904566896c89e1e6b037a6f50/src/polkitagent/polkitagentsession.c#L599
+    preBuild = ''
+      export POLKIT_AGENT_HELPER_PATH="$(strings ${polkit.out}/lib/libpolkit-agent-1.so | grep "polkit-agent-helper-1")"
+    '';
+
     meta = {
-      mainProgram = "soteria";
-      description = "A Polkit authentication agent written in GTK designed to be used with any desktop environment";
+      description = "Polkit authentication agent written in GTK designed to be used with any desktop environment";
       homepage = "https://github.com/ImVaskel/soteria";
-      platforms = lib.platforms.linux;
       license = lib.licenses.asl20;
+      mainProgram = "soteria";
+      maintainers = with lib.maintainers; [NotAShelf];
+      inherit (polkit.meta) platforms;
     };
   }
