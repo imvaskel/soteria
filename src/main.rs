@@ -5,7 +5,6 @@ use gtk::glib::{self, clone, spawn_future_local};
 use state::State;
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::SystemTime;
 use tokio::sync::broadcast::channel;
 use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
