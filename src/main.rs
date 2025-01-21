@@ -90,8 +90,8 @@ async fn main() -> Result<()> {
     let subject_kind = "unix-process".to_string();
     let subject_details = HashMap::from([
         ("pid".to_string(), Value::new(std::process::id())),
-        ("start-time".to_string(), 0),
-        ("uid".to_string(), -1),
+        ("start-time".to_string(), Value::new(0i64)),
+        ("uid".to_string(), Value::new(-1i32)),
     ]);
     let subject = Subject::new(subject_kind, subject_details);
 
