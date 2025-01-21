@@ -44,6 +44,8 @@ cargo install --locked --git https://github.com/imvaskel/soteria
 
 This should place Soteria into ~/.cargo/bin and you can run it from there.
 
+Or if you use Nix, Soteria is packaged there. There is a NixOS module to enable it under ``security.soteria.enable``.
+
 ## Usage
 
 Simply have your desktop run the `soteria` binary to have it register as your authentication agent. Once run, anytime an application requests polkit authentication, it should popup and prompt you to authenticate.
