@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
 
     let builder = Builder::from_string(constants::UI_XML);
 
-    let window: ApplicationWindow = ui::get_object(&builder, "window")?;
+    let window: ApplicationWindow = ui::get_object(&builder, "soteria-window")?;
     let password_entry: PasswordEntry = ui::get_object(&builder, "password-entry")?;
     let cancel_button: Button = ui::get_object(&builder, "cancel-button")?;
     let confirm_button: Button = ui::get_object(&builder, "confirm-button")?;
