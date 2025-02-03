@@ -8,9 +8,9 @@ Soteria is a Polkit authentication agent written in GTK designed to be used with
 <img alt="Failed authentication popup" src=".github/example_failed.png" width=50% height=50% ></image>
 
 [Installation](#installation) •
+[Usage](#usage) •
 [Why?](#why) •
-[Configuration](#configuration) •
-[Usage](#usage)
+[Theming](#theming)
 
 </div>
 
@@ -70,6 +70,11 @@ Other desktop environments should be similiar.
 
 When looking for a polkit authentication agent, I noticed that most were either extremely old, using a framework that I didn't like, or completely unstylable.
 Additionally, most were hard to edit as they just called out to polkit's `libpolkit-agent` to do all the work. Because of this, I decieded to put the work in to figure out how authentication agents worked.
+
+## Theming
+
+You can theme this application in `~/.config/gtk-4.0/gtk.css`.
+The top-level window has the ID `soteria-window`, so your custom style should go in a block starting `#soteria-window {...`. From here you can select the separate components using [CSS combinators](https://www.w3schools.com/CSS/css_combinators.asp) -- run `GTK_DEBUG=interactive /path/to/soteria` to see the full list.
 
 ## Debugging
 

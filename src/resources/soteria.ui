@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <interface domain="gay.vaskel.Soteria">
   <requires lib="gtk" version="4.0"/>
-  <object class="GtkApplicationWindow" id="window">
+  <object class="GtkApplicationWindow" id="soteria-window">
     <property name="resizable">false</property>
     <property name="modal">true</property>
     <property name="default-height">250</property>
