@@ -1,6 +1,6 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use eyre::{ensure, Result, WrapErr, OptionExt};
+use eyre::{ensure, OptionExt, Result, WrapErr};
 use gtk::glib::{self, clone, spawn_future_local};
 use state::State;
 use std::collections::HashMap;
@@ -71,7 +71,9 @@ async fn main() -> Result<()> {
     let info_label: Label = ui::get_object(&builder, "label-message")?;
     let dropdown: DropDown = ui::get_object(&builder, "identity-dropdown")?;
 
-    let config_path = std::env::var("XDG_CONFIG_HOME").or(std::env::var("HOME").and_then(|e| Ok(e + "/.config"))).context("Could not resolve configuration path")?;
+    let config_path = std::env::var("XDG_CONFIG_HOME")
+        .or(std::env::var("HOME").and_then(|e| Ok(e + "/.config")))
+        .context("Could not resolve configuration path")?;
     let css_path = format!("{}/soteria/style.css", config_path);
     let path = Path::new(&css_path);
     if path.is_file() {
@@ -79,7 +81,8 @@ async fn main() -> Result<()> {
 
         let provider = gtk::CssProvider::new();
         provider.load_from_path(path);
-        let display = gtk::gdk::Display::default().ok_or_eyre("Could not get default gtk display.")?;
+        let display =
+            gtk::gdk::Display::default().ok_or_eyre("Could not get default gtk display.")?;
         gtk::style_context_add_provider_for_display(&display, &provider, 1000);
     }
 
