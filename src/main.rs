@@ -1,6 +1,6 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use eyre::{ensure, Result};
+use eyre::{ensure, Result, WrapErr, OptionExt};
 use gtk::glib::{self, clone, spawn_future_local};
 use state::State;
 use std::collections::HashMap;
@@ -71,6 +71,18 @@ async fn main() -> Result<()> {
     let info_label: Label = ui::get_object(&builder, "label-message")?;
     let dropdown: DropDown = ui::get_object(&builder, "identity-dropdown")?;
 
+    let config_path = std::env::var("XDG_CONFIG_HOME").or(std::env::var("HOME").and_then(|e| Ok(e + "/.config"))).context("Could not resolve configuration path")?;
+    let css_path = format!("{}/soteria/style.css", config_path);
+    let path = Path::new(&css_path);
+    if path.is_file() {
+        tracing::info!("loading css stylesheet from {}", css_path);
+
+        let provider = gtk::CssProvider::new();
+        provider.load_from_path(path);
+        let display = gtk::gdk::Display::default().ok_or_eyre("Could not get default gtk display.")?;
+        gtk::style_context_add_provider_for_display(&display, &provider, 1000);
+    }
+
     application.connect_activate(clone!(@weak window => move |app| {
         app.add_window(&window);
     }));
@@ -86,12 +98,15 @@ async fn main() -> Result<()> {
     // set on certain desktop environments, so unix-process seems to be preferred
     // (referencing other implementations)
     let locale = "en_US.UTF-8"; // TODO: Needed?
-    let subject_kind = "unix-process".to_string();
-    let subject_details = HashMap::from([
-        ("pid".to_string(), Value::new(std::process::id())),
-        ("start-time".to_string(), Value::new(0u64)),
-        ("uid".to_string(), Value::new(-1i32)),
-    ]);
+    let subject_kind = "unix-session".to_string();
+
+    let subject_details = HashMap::from([(
+        "session-id".to_string(),
+        Value::new(
+            std::env::var("XDG_SESSION_ID")
+                .context("Could not get XDG session id, make sure that it is set and try again.")?,
+        ),
+    )]);
     let subject = Subject::new(subject_kind, subject_details);
 
     application.register(Cancellable::NONE)?;

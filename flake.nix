@@ -28,15 +28,14 @@
     devShells = forEachSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       craneLib = crane.mkLib pkgs;
+      soteria = self.packages.${system}.default;
+      buildDeps = soteria.nativeBuildInputs ++ soteria.buildInputs;
     in {
       default = craneLib.devShell {
-        # Additional dev-shell environment variables can be set directly
-        # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
-
-        # Extra inputs can be added here; cargo and rustc are provided by default.
-        packages = [
-          # pkgs.ripgrep
-        ];
+        packages =
+          [
+          ]
+          ++ buildDeps;
       };
     });
   };
