@@ -9,7 +9,6 @@ eyre = "0.6.12"
 figment = { version = "0.10.18", features = ["toml"] }
 gtk4 = {version = "0.8.2", features = ["v4_10"]}
 serde = {version = "1.0.201", features = ["serde_derive"]}
-sysinfo = { version = "0.33.1", features = ["system", "user"], default-features = false }
 tokio = {version = "1.37.0", features = ["full"]}
 tracing = "0.1.40"
 tracing-subscriber = {version = "0.3.18", features = ["std", "fmt", "env-filter", "ansi"]}
