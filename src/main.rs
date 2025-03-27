@@ -170,10 +170,9 @@ async fn main() -> Result<()> {
                             continue;
                         }
 
+                        let names = names.iter().map(AsRef::as_ref).collect::<Vec<_>>();
                         let store: StringList = builder.object("identity-dropdown-values").unwrap();
-                        for name in names.iter() {
-                            store.append(name.as_str());
-                        }
+                        store.splice(0, store.n_items(), &names);
                         info_label.set_label(&message);
 
                         tracing::debug!("Attempting to prompt user for authentication.");
