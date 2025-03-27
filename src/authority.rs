@@ -105,7 +105,7 @@ impl<'a> Subject<'a> {
     default_service = "org.freedesktop.PolicyKit1",
     default_path = "/org/freedesktop/PolicyKit1/Authority"
 )]
-trait Authority {
+pub trait Authority {
     /// AuthenticationAgentResponse method
     fn authentication_agent_response(&self, cookie: &str, identity: &Identity<'_>) -> Result<()>;
 
