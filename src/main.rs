@@ -71,6 +71,8 @@ async fn main() -> Result<()> {
     let info_label: Label = ui::get_object(&builder, "label-message")?;
     let dropdown: DropDown = ui::get_object(&builder, "identity-dropdown")?;
 
+    password_entry.grab_focus();
+
     let config_path = std::env::var("XDG_CONFIG_HOME")
         .or(std::env::var("HOME").map(|e| e + "/.config"))
         .context("Could not resolve configuration path")?;
