@@ -63,31 +63,86 @@ impl State {
     pub fn start_authentication(&mut self, cookie: String) -> Result<bool> {
         self.cookie = Some(cookie);
 
-        let window_close = self.components.window.connect_hide_on_close_notify(clone!(@strong self.sender as sender, @strong self.components as components, @strong self.cookie as cookie => move |_| {
-            sender.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone().unwrap()}).unwrap();
-            components.password_entry.set_text("");
-        }));
+        let window_close = self.components.window.connect_hide_on_close_notify(clone!(
+            #[strong(rename_to=sender)]
+            self.sender,
+            #[strong(rename_to=components)]
+            self.components,
+            #[strong(rename_to=cookie)]
+            self.cookie,
+            move |_| {
+                sender
+                    .send(AuthenticationEvent::UserCanceled {
+                        cookie: cookie.clone().unwrap(),
+                    })
+                    .unwrap();
+                components.password_entry.set_text("");
+            }
+        ));
 
-        let window_close_request = self.components.window.connect_close_request(clone!(@strong self.sender as sender, @strong self.components as components, @strong self.cookie as cookie => move |_| {
-            sender.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone().unwrap()}).unwrap();
-            components.password_entry.set_text("");
+        let window_close_request = self.components.window.connect_close_request(clone!(
+            #[strong(rename_to=sender)]
+            self.sender,
+            #[strong(rename_to=components)]
+            self.components,
+            #[strong(rename_to=cookie)]
+            self.cookie,
+            move |_| {
+                sender
+                    .send(AuthenticationEvent::UserCanceled {
+                        cookie: cookie.clone().unwrap(),
+                    })
+                    .unwrap();
+                components.password_entry.set_text("");
 
-            gtk4::glib::Propagation::Proceed
-        }));
+                gtk4::glib::Propagation::Proceed
+            }
+        ));
 
-        let cancel_button_clicked = self.components.cancel_button.connect_clicked(clone!(@strong self.sender as sender, @strong self.components as components, @strong self.cookie as cookie=> move |_| {
-            sender.send(AuthenticationEvent::UserCanceled{cookie: cookie.clone().unwrap()}).unwrap();
-            components.password_entry.set_text("");
-            components.window.set_visible(false);
-        }));
+        let cancel_button_clicked = self.components.cancel_button.connect_clicked(clone!(
+            #[strong(rename_to=sender)]
+            self.sender,
+            #[strong(rename_to=components)]
+            self.components,
+            #[strong(rename_to=cookie)]
+            self.cookie,
+            move |_| {
+                sender
+                    .send(AuthenticationEvent::UserCanceled {
+                        cookie: cookie.clone().unwrap(),
+                    })
+                    .unwrap();
+                components.password_entry.set_text("");
+                components.window.set_visible(false);
+            }
+        ));
 
-        let confirm_button_clicked = self.components.confirm_button.connect_clicked(clone!(@strong self.sender as sender, @strong self.components as components, @strong self.cookie as cookie => move |_| {
-            let pw = components.password_entry.text();
-            let user: StringObject = components.dropdown.selected_item().unwrap().dynamic_cast().unwrap();
-            sender.send(AuthenticationEvent::UserProvidedPassword { cookie: cookie.clone().unwrap(), username: user.string().to_string(), password: pw.to_string()}).unwrap();
-            components.password_entry.set_text("");
-            components.window.set_visible(false);
-        }));
+        let confirm_button_clicked = self.components.confirm_button.connect_clicked(clone!(
+            #[strong(rename_to=sender)]
+            self.sender,
+            #[strong(rename_to=components)]
+            self.components,
+            #[strong(rename_to=cookie)]
+            self.cookie,
+            move |_| {
+                let pw = components.password_entry.text();
+                let user: StringObject = components
+                    .dropdown
+                    .selected_item()
+                    .unwrap()
+                    .dynamic_cast()
+                    .unwrap();
+                sender
+                    .send(AuthenticationEvent::UserProvidedPassword {
+                        cookie: cookie.clone().unwrap(),
+                        username: user.string().to_string(),
+                        password: pw.to_string(),
+                    })
+                    .unwrap();
+                components.password_entry.set_text("");
+                components.window.set_visible(false);
+            }
+        ));
 
         self.signals = Some(ComponentSignals {
             window_close,

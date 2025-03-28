@@ -71,8 +71,10 @@ async fn main() -> Result<()> {
     let info_label: Label = ui::get_object(&builder, "label-message")?;
     let dropdown: DropDown = ui::get_object(&builder, "identity-dropdown")?;
 
+    password_entry.grab_focus();
+
     let config_path = std::env::var("XDG_CONFIG_HOME")
-        .or(std::env::var("HOME").and_then(|e| Ok(e + "/.config")))
+        .or(std::env::var("HOME").map(|e| e + "/.config"))
         .context("Could not resolve configuration path")?;
     let css_path = format!("{}/soteria/style.css", config_path);
     let path = Path::new(&css_path);
@@ -86,13 +88,21 @@ async fn main() -> Result<()> {
         gtk::style_context_add_provider_for_display(&display, &provider, 1000);
     }
 
-    application.connect_activate(clone!(@weak window => move |app| {
-        app.add_window(&window);
-    }));
+    application.connect_activate(clone!(
+        #[weak]
+        window,
+        move |app| {
+            app.add_window(&window);
+        }
+    ));
 
-    password_entry.connect_activate(clone!(@weak confirm_button => move |_| {
-        confirm_button.emit_clicked();
-    }));
+    password_entry.connect_activate(clone!(
+        #[weak]
+        confirm_button,
+        move |_| {
+            confirm_button.emit_clicked();
+        }
+    ));
 
     let (tx, mut rx) = channel::<AuthenticationEvent>(100);
 
@@ -128,45 +138,65 @@ async fn main() -> Result<()> {
 
     tracing::info!("Registered as authentication provider.");
 
-    spawn_future_local(clone!(@weak window, @weak builder => async move {
-        let mut state = State::new(tx.clone(), cancel_button.clone(), confirm_button.clone(), password_entry.clone(), window.clone(), dropdown.clone());
+    spawn_future_local(clone!(
+        #[weak]
+        window,
+        #[weak]
+        builder,
+        async move {
+            let mut state = State::new(
+                tx.clone(),
+                cancel_button.clone(),
+                confirm_button.clone(),
+                password_entry.clone(),
+                window.clone(),
+                dropdown.clone(),
+            );
 
-        loop {
-            let failed_alert = ui::build_fail_alert();
+            loop {
+                let failed_alert = ui::build_fail_alert();
 
-            let event = rx.recv().await.expect("Somehow the channel closed.");
-            tracing::debug!("recieved event {:#?}", event);
+                let event = rx.recv().await.expect("Somehow the channel closed.");
+                tracing::debug!("recieved event {:#?}", event);
 
-            match event {
-                AuthenticationEvent::Started{cookie, message, names} => {
-                    let res = state.start_authentication(cookie).unwrap();
-                    if !res {
-                        continue;
+                match event {
+                    AuthenticationEvent::Started {
+                        cookie,
+                        message,
+                        names,
+                    } => {
+                        let res = state.start_authentication(cookie).unwrap();
+                        if !res {
+                            continue;
+                        }
+
+                        let names = names.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+                        let store: StringList = builder.object("identity-dropdown-values").unwrap();
+                        store.splice(0, store.n_items(), &names);
+                        info_label.set_label(&message);
+
+                        tracing::debug!("Attempting to prompt user for authentication.");
+                        window.present();
                     }
-
-                    let store: StringList = builder.object("identity-dropdown-values").unwrap();
-                    for name in names.iter() {
-                        store.append(name.as_str());
+                    AuthenticationEvent::Canceled { cookie: c } => {
+                        state.end_authentication(&c);
                     }
-                    info_label.set_label(&message);
-
-                    tracing::debug!("Attempting to prompt user for authentication.");
-                    window.present();
+                    AuthenticationEvent::UserProvidedPassword {
+                        cookie: c,
+                        username: _,
+                        password: _,
+                    } => {
+                        state.end_authentication(&c);
+                    }
+                    AuthenticationEvent::AuthorizationFailed { cookie: c } => {
+                        state.end_authentication(&c);
+                        failed_alert.show(Some(&window));
+                    }
+                    _ => (),
                 }
-                AuthenticationEvent::Canceled{cookie: c} => {
-                    state.end_authentication(&c);
-                },
-                AuthenticationEvent::UserProvidedPassword{ cookie: c, username: _, password: _} => {
-                    state.end_authentication(&c);
-                }
-                AuthenticationEvent::AuthorizationFailed{cookie: c} => {
-                    state.end_authentication(&c);
-                    failed_alert.show(Some(&window));
-                }
-                _ => (),
             }
         }
-    }));
+    ));
 
     application.run();
 
