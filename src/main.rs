@@ -177,7 +177,8 @@ async fn main() -> Result<()> {
                         tracing::debug!("Attempting to prompt user for authentication.");
                         window.present();
                     }
-                    AuthenticationEvent::Canceled { cookie: c } => {
+                    AuthenticationEvent::Canceled { cookie: c }
+                    | AuthenticationEvent::UserCanceled { cookie: c } => {
                         state.end_authentication(&c);
                     }
                     AuthenticationEvent::UserProvidedPassword {
@@ -191,7 +192,6 @@ async fn main() -> Result<()> {
                         state.end_authentication(&c);
                         failed_alert.show(Some(&window));
                     }
-                    _ => (),
                 }
             }
         }
