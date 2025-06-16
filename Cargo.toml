@@ -17,4 +17,4 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "ansi",
 ] }
-zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
+zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
