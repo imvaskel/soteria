@@ -1,7 +1,13 @@
 [package]
-edition = "2021"
 name = "soteria"
 version = "0.1.2"
+authors = ["Vaskel"]
+edition = "2021"
+rust-version = "1.83"
+description = "Soteria is a Polkit authentication agent written in GTK"
+readme = "README.md"
+repository = "https://github.com/imvaskel/soteria"
+license = "Apache-2.0"
 
 [dependencies]
 etc-passwd = "0.2.0"
@@ -17,4 +23,4 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "ansi",
 ] }
-zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
+zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
