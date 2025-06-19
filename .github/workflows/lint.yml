@@ -34,6 +34,6 @@ jobs:
       - name: "Run cargo clippy"
         id: cargo-clippy
         run: |
-          cargo clippy -- -Dwarnings
+          cargo clippy --locked -- -Dwarnings
 
 
