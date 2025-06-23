@@ -1,8 +1,8 @@
 use gtk::prelude::*;
 use gtk4::{
+    AlertDialog,
     glib::{clone, spawn_future_local},
     prelude::OrientableExt,
-    AlertDialog,
 };
 use relm4::prelude::*;
 use tokio::sync::broadcast;

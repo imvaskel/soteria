@@ -1,6 +1,6 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use eyre::{ensure, OptionExt, Result, WrapErr};
+use eyre::{OptionExt, Result, WrapErr, ensure};
 use relm4::RelmApp;
 use std::collections::HashMap;
 use std::path::Path;

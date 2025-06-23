@@ -26,9 +26,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use zbus::{
-    proxy,
+    DBusError, proxy,
     zvariant::{Type, Value},
-    DBusError,
 };
 
 pub type Result<T> = std::result::Result<T, PolkitError>;
