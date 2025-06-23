@@ -33,8 +33,7 @@ Additionally, you will need `polkit` and `libpolkit-agent` installed.
 > ```
 > as the contents.
 
-Soteria will also need Rust. It was developed on Rust `1.78.0` however,
-lower versions of Rust should still work.
+Soteria will also need Rust. Currently the only requirement is a compiler that supports the ``edition = 2024``.  (1.85 or newer).
 
 Run the following commmand to build and install Soteria:
 

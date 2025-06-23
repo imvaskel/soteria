@@ -2,8 +2,8 @@
 name = "soteria"
 version = "0.2.0"
 authors = ["Vaskel"]
-edition = "2021"
-rust-version = "1.83"
+edition = "2024"
+rust-version = "1.85"
 description = "Soteria is a Polkit authentication agent written in GTK"
 readme = "README.md"
 repository = "https://github.com/imvaskel/soteria"
