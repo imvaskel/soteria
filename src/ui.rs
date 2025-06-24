@@ -33,8 +33,10 @@ impl AsyncComponent for App {
 
     view! {
         gtk::Window {
-            set_title: Some("Authorize"), set_default_height: 250,
+            set_title: Some("Authorize"),
+            set_default_height: 250,
             set_default_width: 450,
+            set_resizable: false,
             set_modal: true,
             set_hide_on_close: true,
             #[watch]
