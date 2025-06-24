@@ -15,7 +15,6 @@ eyre = "0.6.12"
 figment = { version = "0.10.18", features = ["toml"] }
 gtk4 = { version = "0.9.6", features = ["v4_10"] }
 relm4 = "0.9.1"
-relm4-components = "0.9.1"
 serde = { version = "1.0.201", features = ["serde_derive"] }
 tokio = { version = "1.37.0", features = ["full"] }
 tracing = "0.1.40"
