@@ -70,6 +70,10 @@ Other desktop environments should be similiar.
 When looking for a polkit authentication agent, I noticed that most were either extremely old, using a framework that I didn't like, or completely unstylable.
 Additionally, most were hard to edit as they just called out to polkit's `libpolkit-agent` to do all the work. Because of this, I decieded to put the work in to figure out how authentication agents worked.
 
+It should be noted that this project does still call out to libpolkit-agent, but only via the polkit agent helper. This is because polkit
+uses root sending a dbus response to the polkit daemon to confirm authentication as the identity. I find it non-beneficial to put in
+the work to maintain the security implications of a setuid binary.
+
 ## Debugging
 
 If you would like to debug why something went wrong, just run `RUST_LOG=debug soteria` and this will start it with debug logging, which should help you identify what's going wrong.
