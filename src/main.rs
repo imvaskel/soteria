@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     let config_path = std::env::var("XDG_CONFIG_HOME")
         .or(std::env::var("HOME").map(|e| e + "/.config"))
         .context("Could not resolve configuration path")?;
-    let css_path = format!("{}/soteria/style.css", config_path);
+    let css_path = format!("{config_path}/soteria/style.css");
     let path = Path::new(&css_path);
     if path.is_file() {
         tracing::info!("loading css stylesheet from {}", css_path);
