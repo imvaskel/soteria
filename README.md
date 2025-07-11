@@ -45,6 +45,15 @@ This should place Soteria into ~/.cargo/bin and you can run it from there.
 
 Or if you use Nix, Soteria is packaged there. There is a NixOS module to enable it under ``security.soteria.enable``.
 
+> [!NOTE]
+> Some users using non-desktop environments (sway, etc) have reported that ``XDG_SESSION_ID`` is not being properly imported.
+> XDG session info is required for the agent to register itself to polkit.
+> To fix this, you must import the proper environment variables (assuming systemd is managing the user session):
+> ```
+> dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+> ```
+> For more info, see NixOS/nixpkgs#373290.
+
 ## Usage
 
 Simply have your desktop run the `soteria` binary to have it register as your authentication agent. Once run, anytime an application requests polkit authentication, it should popup and prompt you to authenticate.
@@ -58,7 +67,7 @@ exec-once = /path/to/soteria
 You may also like:
 
 ```conf
-windowrulev2=pin,class:gay.vaskel.Soteria
+windowrulev2=pin,class:gay.vaskel.soteria
 ```
 
 This makes sure that Soteria stays pinned to your current workspace.
