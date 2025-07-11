@@ -68,10 +68,6 @@ async fn main() -> Result<()> {
 
     let (tx, _rx) = channel::<AuthenticationEvent>(100);
 
-    // Docs say that there are a couple of options for registering ourselves subject
-    // wise. Users are having problems with XDG_SESSION_ID not being
-    // set on certain desktop environments, so unix-process seems to be preferred
-    // (referencing other implementations)
     let locale = "en_US.UTF-8"; // TODO: Needed?
     let subject_kind = "unix-session".to_string();
 
