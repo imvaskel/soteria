@@ -99,6 +99,7 @@ impl AsyncComponent for App {
                 gtk::FlowBox {
                     set_hexpand: true,
                     set_homogeneous: true,
+                    set_margin_bottom: 16,
                     set_max_children_per_line: 2,
                     set_valign: gtk::Align::End,
                     set_vexpand: true,
