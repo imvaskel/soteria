@@ -15,14 +15,43 @@ Soteria is a Polkit authentication agent written in GTK designed to be used with
 </div>
 
 ## Installation
+### 1. Arch Linux
 
-Soteria requires GTK >= 4.10. For Arch based distros, you will need
-`gtk4`, Debian based distros will need `libgtk-4-dev`, and Fedora
+Soteria is available on the [AUR](https://aur.archlinux.org/packages/soteria-git) as `soteria-git`
+. You can install it using an AUR helper:
+
+```bash
+# Using yay
+yay -S soteria-git
+# or using paru
+paru -S soteria-git
+```
+or manually: 
+```bash
+git clone https://aur.archlinux.org/soteria-git.git
+cd soteria-git
+makepkg -si
+```
+This should place Soteria into `/usr/lib/soteria-polkit/soteria`
+
+### 2. NixOS
+
+Soteria is available as `soteria`. There is a also NixOS module to enable it under ``security.soteria.enable``.
+> [!NOTE]
+> Some users using non-desktop environments (sway, etc) have reported that ``XDG_SESSION_ID`` is not being properly imported.
+> XDG session info is required for the agent to register itself to polkit.
+> To fix this, you must import the proper environment variables (assuming systemd is managing the user session):
+> ```
+> dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+> ```
+> For more info, see NixOS/nixpkgs#373290.
+
+### 3. Manual Installation
+Soteria requires GTK >= 4.10. Debian based distros will need `libgtk-4-dev`, and Fedora
 based distros will need `gtk4-devel`.
 
 Additionally, you will need `polkit` and `libpolkit-agent` installed.
 (`libpolkit-agent` should be shipped with `polkit`).
-
 
 > [!NOTE]
 > If the executable `polkit-agent-helper-1`
@@ -43,16 +72,8 @@ cargo install --locked --git https://github.com/imvaskel/soteria
 
 This should place Soteria into ~/.cargo/bin and you can run it from there.
 
-Or if you use Nix, Soteria is packaged there. There is a NixOS module to enable it under ``security.soteria.enable``.
 
-> [!NOTE]
-> Some users using non-desktop environments (sway, etc) have reported that ``XDG_SESSION_ID`` is not being properly imported.
-> XDG session info is required for the agent to register itself to polkit.
-> To fix this, you must import the proper environment variables (assuming systemd is managing the user session):
-> ```
-> dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-> ```
-> For more info, see NixOS/nixpkgs#373290.
+
 
 ## Usage
 
@@ -77,7 +98,7 @@ Other desktop environments should be similiar.
 ## Why?
 
 When looking for a polkit authentication agent, I noticed that most were either extremely old, using a framework that I didn't like, or completely unstylable.
-Additionally, most were hard to edit as they just called out to polkit's `libpolkit-agent` to do all the work. Because of this, I decieded to put the work in to figure out how authentication agents worked.
+Additionally, most were hard to edit as they just called out to polkit's `libpolkit-agent` to do all the work. Because of this, I decided to put the work in to figure out how authentication agents worked.
 
 It should be noted that this project does still call out to libpolkit-agent, but only via the polkit agent helper. This is because polkit
 uses root sending a dbus response to the polkit daemon to confirm authentication as the identity. I find it non-beneficial to put in
