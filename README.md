@@ -15,7 +15,17 @@ Soteria is a Polkit authentication agent written in GTK designed to be used with
 </div>
 
 ## Installation
-### 1. Arch Linux
+
+> [!NOTE]
+> Some users using non-desktop environments (sway, etc) have reported that ``XDG_SESSION_ID`` is not being properly imported.
+> XDG session info is required for the agent to register itself to polkit.
+> To fix this, you must import the proper environment variables (assuming systemd is managing the user session):
+> ```
+> dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+> ```
+> For more info, see NixOS/nixpkgs#373290.
+
+### Arch Linux
 
 Soteria is available on the [AUR](https://aur.archlinux.org/packages/soteria-git) as `soteria-git`
 . You can install it using an AUR helper:
@@ -34,19 +44,12 @@ makepkg -si
 ```
 This should place Soteria into `/usr/lib/soteria-polkit/soteria`
 
-### 2. NixOS
+### NixOS
 
 Soteria is available as `soteria`. There is a also NixOS module to enable it under ``security.soteria.enable``.
-> [!NOTE]
-> Some users using non-desktop environments (sway, etc) have reported that ``XDG_SESSION_ID`` is not being properly imported.
-> XDG session info is required for the agent to register itself to polkit.
-> To fix this, you must import the proper environment variables (assuming systemd is managing the user session):
-> ```
-> dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-> ```
-> For more info, see NixOS/nixpkgs#373290.
 
-### 3. Manual Installation
+### Manual Installation
+
 Soteria requires GTK >= 4.10. Debian based distros will need `libgtk-4-dev`, and Fedora
 based distros will need `gtk4-devel`.
 
@@ -71,9 +74,6 @@ cargo install --locked --git https://github.com/imvaskel/soteria
 ```
 
 This should place Soteria into ~/.cargo/bin and you can run it from there.
-
-
-
 
 ## Usage
 
