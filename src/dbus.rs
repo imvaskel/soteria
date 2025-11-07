@@ -127,13 +127,21 @@ impl AuthenticationAgent {
                             } else if line.starts_with("FAILURE") {
                                 tracing::debug!("helper replied with failure.");
                                 self.sender
-                                    .send(AuthenticationEvent::AuthorizationFailed {
+                                    .send(AuthenticationEvent::AuthorizationRetry {
+                                        cookie: cookie.to_string(),
+                                        retry_message: "Authentication failed. Please try again."
+                                            .to_string(),
+                                    })
+                                    .unwrap();
+                                continue;
+                            } else if line.starts_with("SUCCESS") {
+                                tracing::debug!("helper replied with success.");
+
+                                self.sender
+                                    .send(AuthenticationEvent::AuthorizationSucceeded {
                                         cookie: cookie.to_string(),
                                     })
                                     .unwrap();
-                                Err(PolkitError::NotAuthorized("".into()))?;
-                            } else if line.starts_with("SUCCESS") {
-                                tracing::debug!("helper replied with success.");
                                 return Ok(());
                             }
                         }
