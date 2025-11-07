@@ -77,7 +77,7 @@ impl AsyncComponent for App {
                 gtk::Label {
                     #[watch]
                     set_label: &if let Some(retry_message) = model.retry_message.clone() {
-                        format!("{}", retry_message)
+                        retry_message.to_string()
                     } else {
                         "".to_string()
                     },
