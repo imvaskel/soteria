@@ -6,6 +6,7 @@ pub enum AuthenticationEvent {
     Started {
         cookie: String,
         message: String,
+        retry_message: Option<String>,
         names: Vec<String>,
     },
     /// Polkit sent a request for the authentication to be canceled.
@@ -26,7 +27,7 @@ pub enum AuthenticationEvent {
     /// The user provided a password, but it was incorrect.
     AuthorizationRetry {
         cookie: String,
-        retry_message: String,
+        retry_message: Option<String>,
     },
 }
 
@@ -39,11 +40,13 @@ impl Debug for AuthenticationEvent {
             AuthenticationEvent::Started {
                 cookie,
                 message,
+                retry_message,
                 names,
             } => f
                 .debug_struct("Started")
                 .field("cookie", &cookie)
                 .field("message", &message)
+                .field("retry_message", &retry_message)
                 .field("names", &names)
                 .finish(),
             AuthenticationEvent::Canceled { cookie } => {

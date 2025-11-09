@@ -219,6 +219,7 @@ impl AsyncComponent for App {
                 AuthenticationEvent::Started {
                     cookie,
                     message,
+                    retry_message,
                     names,
                 } => {
                     if self.cookie.is_none() {
@@ -226,7 +227,7 @@ impl AsyncComponent for App {
                         self.message = message;
                         self.identities = names;
                         self.authenticating = false;
-                        self.retry_message = None;
+                        self.retry_message = retry_message;
                     }
                 }
                 AuthenticationEvent::Canceled { cookie }
@@ -259,7 +260,7 @@ impl AsyncComponent for App {
                 } => {
                     if let Some(c) = &self.cookie {
                         if *c == cookie {
-                            self.retry_message = Some(retry_message);
+                            self.retry_message = retry_message;
                             self.authenticating = false;
                         }
                     }
