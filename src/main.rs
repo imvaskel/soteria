@@ -1,6 +1,6 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use eyre::{OptionExt, Result, WrapErr, ensure};
+use eyre::{Result, WrapErr, ensure};
 use relm4::RelmApp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -45,15 +45,7 @@ async fn main() -> Result<()> {
         .context("Could not resolve configuration path")?;
     let css_path = format!("{config_path}/soteria/style.css");
     let path = Path::new(&css_path);
-    if path.is_file() {
-        tracing::info!("loading css stylesheet from {}", css_path);
 
-        let provider = gtk4::CssProvider::new();
-        provider.load_from_path(path);
-        let display =
-            gtk4::gdk::Display::default().ok_or_eyre("Could not get default gtk display.")?;
-        gtk4::style_context_add_provider_for_display(&display, &provider, 1000);
-    }
     let config: SystemConfig = SystemConfig::from_file()?;
 
     ensure!(
@@ -94,6 +86,11 @@ async fn main() -> Result<()> {
     tracing::info!("Registered as authentication provider.");
 
     let app = RelmApp::new("gay.vaskel.soteria");
+    if path.is_file() {
+        tracing::info!("loading css stylesheet from {}", css_path);
+        relm4::set_global_css_from_file(path)
+            .context("Could not load CSS stylesheet for some reason")?;
+    }
     app.run_async::<App>(tx.clone());
 
     Ok(())
