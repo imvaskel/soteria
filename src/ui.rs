@@ -1,6 +1,5 @@
 use gtk::prelude::*;
 use gtk4::{
-    AlertDialog,
     glib::{clone, spawn_future_local},
     prelude::OrientableExt,
 };
@@ -20,6 +19,8 @@ pub struct App {
     message: String,
     identities: Vec<String>,
     cookie: Option<String>,
+    retry_message: Option<String>,
+    authenticating: bool,
     tx: broadcast::Sender<AuthenticationEvent>, // chosen_identity: Option<String>,
                                                 // password_buffer: Option<String>,
 }
@@ -69,7 +70,22 @@ impl AsyncComponent for App {
                     set_label: &model.message,
                     set_single_line_mode: true,
                     set_wrap: true,
-                    set_margin_bottom: 16
+                    #[watch]
+                    set_margin_bottom: if model.retry_message.is_some() { 8 } else { 16 },
+                },
+
+                gtk::Label {
+                    #[watch]
+                    set_label: &if let Some(retry_message) = model.retry_message.clone() {
+                        retry_message.to_string()
+                    } else {
+                        "".to_string()
+                    },
+                    #[watch]
+                    set_visible: model.retry_message.is_some(),
+                    #[watch]
+                    set_margin_bottom: 16,
+                    set_halign: gtk::Align::Center,
                 },
 
                 gtk::Box {
@@ -90,6 +106,8 @@ impl AsyncComponent for App {
                     set_hexpand: true,
                     set_placeholder_text: Some( "Password" ),
                     set_show_peek_icon: true,
+                    #[watch]
+                    set_editable: !model.authenticating,
 
                     connect_activate[confirm_button] => move |_| {
                         confirm_button.emit_clicked();
@@ -100,6 +118,7 @@ impl AsyncComponent for App {
                     set_hexpand: true,
                     set_homogeneous: true,
                     set_margin_bottom: 16,
+                    set_margin_top: 8,
                     set_max_children_per_line: 2,
                     set_valign: gtk::Align::End,
                     set_vexpand: true,
@@ -139,6 +158,8 @@ impl AsyncComponent for App {
             identities: Vec::new(),
             tx: init,
             cookie: None,
+            authenticating: false,
+            retry_message: None,
         };
 
         spawn_future_local(clone!(
@@ -178,9 +199,8 @@ impl AsyncComponent for App {
                             password,
                         })
                         .unwrap();
-                    self.cookie = None;
-                    self.message = String::new();
-                    self.identities = Vec::new();
+                    self.retry_message = Some(String::from("Authenticating..."));
+                    self.authenticating = true;
                 }
             }
             AppMsg::Cancel => {
@@ -190,6 +210,8 @@ impl AsyncComponent for App {
                         .unwrap();
                     self.cookie = None;
                     self.message = String::new();
+                    self.retry_message = Some(String::new());
+                    self.authenticating = false;
                     self.identities = Vec::new();
                 }
             }
@@ -197,12 +219,15 @@ impl AsyncComponent for App {
                 AuthenticationEvent::Started {
                     cookie,
                     message,
+                    retry_message,
                     names,
                 } => {
                     if self.cookie.is_none() {
                         self.cookie = Some(cookie);
                         self.message = message;
                         self.identities = names;
+                        self.authenticating = false;
+                        self.retry_message = retry_message;
                     }
                 }
                 AuthenticationEvent::Canceled { cookie }
@@ -212,25 +237,36 @@ impl AsyncComponent for App {
                             self.cookie = None;
                             self.message = String::new();
                             self.identities = Vec::new();
+                            self.retry_message = None;
+                            self.authenticating = false;
                         }
                     }
                 }
-                AuthenticationEvent::AuthorizationFailed { .. } => {
-                    let alert = build_fail_alert();
-                    alert.show(Some(_root));
-                    self.cookie = None;
-                    self.message = String::new();
-                    self.identities = Vec::new();
+                AuthenticationEvent::AuthorizationSucceeded { cookie } => {
+                    if let Some(c) = self.cookie.clone() {
+                        if c == cookie {
+                            tracing::debug!("Authentication succeeded, closing window.");
+                            self.cookie = None;
+                            self.message.clear();
+                            self.identities.clear();
+                            self.retry_message = None;
+                            self.authenticating = false;
+                        }
+                    }
+                }
+                AuthenticationEvent::AuthorizationRetry {
+                    cookie,
+                    retry_message,
+                } => {
+                    if let Some(c) = &self.cookie {
+                        if *c == cookie {
+                            self.retry_message = retry_message;
+                            self.authenticating = false;
+                        }
+                    }
                 }
                 _ => (),
             },
         }
     }
-}
-
-pub fn build_fail_alert() -> AlertDialog {
-    AlertDialog::builder()
-        .message("Authentication failed for some reason. Check your login details and try again.")
-        .buttons(vec!["Ok"])
-        .build()
 }

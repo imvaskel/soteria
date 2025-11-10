@@ -6,6 +6,7 @@ pub enum AuthenticationEvent {
     Started {
         cookie: String,
         message: String,
+        retry_message: Option<String>,
         names: Vec<String>,
     },
     /// Polkit sent a request for the authentication to be canceled.
@@ -18,10 +19,16 @@ pub enum AuthenticationEvent {
         username: String,
         password: String,
     },
-    /// Authorization failed for some reason.
-    AuthorizationFailed { cookie: String },
+    /// The user has successfully authenticated.
+    AuthorizationSucceeded { cookie: String },
+
     // There is already an authentication event being handled.
     //AlreadyRunning { cookie: String },
+    /// The user provided a password, but it was incorrect.
+    AuthorizationRetry {
+        cookie: String,
+        retry_message: Option<String>,
+    },
 }
 
 // Recursive expansion of Debug macro
@@ -33,11 +40,13 @@ impl Debug for AuthenticationEvent {
             AuthenticationEvent::Started {
                 cookie,
                 message,
+                retry_message,
                 names,
             } => f
                 .debug_struct("Started")
                 .field("cookie", &cookie)
                 .field("message", &message)
+                .field("retry_message", &retry_message)
                 .field("names", &names)
                 .finish(),
             AuthenticationEvent::Canceled { cookie } => {
@@ -54,9 +63,17 @@ impl Debug for AuthenticationEvent {
                 .field("cookie", &cookie)
                 .field("username", &username)
                 .finish(),
-            AuthenticationEvent::AuthorizationFailed { cookie } => f
-                .debug_struct("AuthorizationFailed")
+            AuthenticationEvent::AuthorizationSucceeded { cookie } => f
+                .debug_struct("AuthorizationSucceeded")
                 .field("cookie", &cookie)
+                .finish(),
+            AuthenticationEvent::AuthorizationRetry {
+                cookie,
+                retry_message,
+            } => f
+                .debug_struct("AuthorizationRetry")
+                .field("cookie", &cookie)
+                .field("retry_message", &retry_message)
                 .finish(),
         }
     }

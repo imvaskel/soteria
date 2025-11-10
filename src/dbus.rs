@@ -66,6 +66,7 @@ impl AuthenticationAgent {
             .send(AuthenticationEvent::Started {
                 cookie: cookie.to_string(),
                 message: message.to_string(),
+                retry_message: None,
                 names,
             })
             .map_err(|_| PolkitError::Failed("Failed to send data.".to_string()))?;
@@ -113,6 +114,8 @@ impl AuthenticationAgent {
                         stdin.write_all(cookie.as_bytes()).await?;
                         stdin.write_all(b"\n").await?;
 
+                        let mut last_info: Option<String> = None;
+
                         let reader = BufReader::new(stdout);
                         let mut lines = reader.lines();
                         while let Some(line) = lines.next_line().await? {
@@ -124,16 +127,40 @@ impl AuthenticationAgent {
                                     stdin.write_all(pw.as_bytes()).await?;
                                     stdin.write_all(b"\n").await?;
                                 }
+                            } else if let Some(info) = line.strip_prefix("PAM_TEXT_INFO") {
+                                let msg = info.trim().to_string();
+                                tracing::debug!("helper replied with info: {}", msg);
+
+                                if msg.contains("minute") && msg.contains("unlock") {
+                                    last_info = Some(msg.clone());
+                                    self.sender
+                                        .send(AuthenticationEvent::AuthorizationRetry {
+                                            cookie: cookie.to_string(),
+                                            retry_message: Some(msg),
+                                        })
+                                        .unwrap();
+                                }
                             } else if line.starts_with("FAILURE") {
                                 tracing::debug!("helper replied with failure.");
+
+                                let retry_msg = last_info.clone().unwrap_or_else(|| {
+                                    "Authentication failed. Please try again.".to_string()
+                                });
                                 self.sender
-                                    .send(AuthenticationEvent::AuthorizationFailed {
+                                    .send(AuthenticationEvent::AuthorizationRetry {
+                                        cookie: cookie.to_string(),
+                                        retry_message: Some(retry_msg),
+                                    })
+                                    .unwrap();
+                                continue;
+                            } else if line.starts_with("SUCCESS") {
+                                tracing::debug!("helper replied with success.");
+
+                                self.sender
+                                    .send(AuthenticationEvent::AuthorizationSucceeded {
                                         cookie: cookie.to_string(),
                                     })
                                     .unwrap();
-                                Err(PolkitError::NotAuthorized("".into()))?;
-                            } else if line.starts_with("SUCCESS") {
-                                tracing::debug!("helper replied with success.");
                                 return Ok(());
                             }
                         }
