@@ -4,14 +4,14 @@ use eyre::{Result, WrapErr, ensure};
 use relm4::RelmApp;
 use std::collections::HashMap;
 use std::path::Path;
-use tokio::sync::broadcast::channel;
+use tokio::sync::mpsc::channel;
 use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
 
 use zbus::conn;
 
 use crate::config::SystemConfig;
-use crate::events::AuthenticationEvent;
+use crate::events::{AuthenticationAgentEvent, AuthenticationUserEvent};
 use crate::ui::App;
 
 mod authority;
@@ -58,7 +58,8 @@ async fn main() -> Result<()> {
         config.get_helper_path()
     );
 
-    let (tx, _rx) = channel::<AuthenticationEvent>(100);
+    let (agent_sender, agent_receiver) = channel::<AuthenticationAgentEvent>(32);
+    let (user_sender, user_receiver) = channel::<AuthenticationUserEvent>(32);
 
     let locale = "en_US.UTF-8"; // TODO: Needed?
     let subject_kind = "unix-session".to_string();
@@ -72,7 +73,7 @@ async fn main() -> Result<()> {
     )]);
     let subject = Subject::new(subject_kind, subject_details);
 
-    let agent = AuthenticationAgent::new(tx.clone(), config.clone());
+    let agent = AuthenticationAgent::new(agent_sender, user_receiver, config.clone());
     let connection = conn::Builder::system()?
         .serve_at(constants::SELF_OBJECT_PATH, agent)?
         .build()
@@ -91,7 +92,7 @@ async fn main() -> Result<()> {
         relm4::set_global_css_from_file(path)
             .context("Could not load CSS stylesheet for some reason")?;
     }
-    app.run_async::<App>(tx.clone());
+    app.run_async::<App>((user_sender, agent_receiver));
 
     Ok(())
 }

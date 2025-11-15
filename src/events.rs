@@ -1,27 +1,29 @@
 use std::fmt::Debug;
 
-#[derive(Clone)]
-pub enum AuthenticationEvent {
-    /// A user has requested to authenticate.
-    Started {
-        cookie: String,
-        message: String,
-        retry_message: Option<String>,
-        names: Vec<String>,
-    },
-    /// Polkit sent a request for the authentication to be canceled.
-    Canceled { cookie: String },
+#[derive(Clone, zeroize::ZeroizeOnDrop)]
+pub enum AuthenticationUserEvent {
     /// The user canceled the authentication.
-    UserCanceled { cookie: String },
-    /// The user provided their password
-    UserProvidedPassword {
+    Canceled { cookie: String },
+    /// The user provided their password.
+    ProvidedPassword {
         cookie: String,
         username: String,
         password: String,
     },
+}
+
+#[derive(Clone, zeroize::ZeroizeOnDrop)]
+pub enum AuthenticationAgentEvent {
+    /// Agent has begun authentication.
+    Started {
+        cookie: String,
+        message: String,
+        names: Vec<String>,
+    },
+    /// Polkit sent a request for the authentication to be canceled.
+    Canceled { cookie: String },
     /// The user has successfully authenticated.
     AuthorizationSucceeded { cookie: String },
-
     // There is already an authentication event being handled.
     //AlreadyRunning { cookie: String },
     /// The user provided a password, but it was incorrect.
@@ -34,40 +36,44 @@ pub enum AuthenticationEvent {
 // Recursive expansion of Debug macro
 // ===================================
 
-impl Debug for AuthenticationEvent {
+impl Debug for AuthenticationUserEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            AuthenticationEvent::Started {
+            Self::Canceled { cookie } => {
+                f.debug_struct("Canceled").field("cookie", &cookie).finish()
+            }
+            Self::ProvidedPassword {
+                cookie, username, ..
+            } => f
+                .debug_struct("ProvidedPassword")
+                .field("cookie", &cookie)
+                .field("username", &username)
+                .finish(),
+        }
+    }
+}
+
+impl Debug for AuthenticationAgentEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Started {
                 cookie,
                 message,
-                retry_message,
                 names,
             } => f
                 .debug_struct("Started")
                 .field("cookie", &cookie)
                 .field("message", &message)
-                .field("retry_message", &retry_message)
                 .field("names", &names)
                 .finish(),
-            AuthenticationEvent::Canceled { cookie } => {
+            Self::Canceled { cookie } => {
                 f.debug_struct("Canceled").field("cookie", &cookie).finish()
             }
-            AuthenticationEvent::UserCanceled { cookie } => f
-                .debug_struct("UserCanceled")
-                .field("cookie", &cookie)
-                .finish(),
-            AuthenticationEvent::UserProvidedPassword {
-                cookie, username, ..
-            } => f
-                .debug_struct("UserProvidedPassword")
-                .field("cookie", &cookie)
-                .field("username", &username)
-                .finish(),
-            AuthenticationEvent::AuthorizationSucceeded { cookie } => f
+            Self::AuthorizationSucceeded { cookie } => f
                 .debug_struct("AuthorizationSucceeded")
                 .field("cookie", &cookie)
                 .finish(),
-            AuthenticationEvent::AuthorizationRetry {
+            Self::AuthorizationRetry {
                 cookie,
                 retry_message,
             } => f
