@@ -4,15 +4,15 @@ use gtk4::{
     prelude::OrientableExt,
 };
 use relm4::prelude::*;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
-use crate::events::AuthenticationEvent;
+use crate::events::{AuthenticationAgentEvent, AuthenticationUserEvent};
 
-#[derive(Debug)]
+#[derive(Debug, zeroize::ZeroizeOnDrop)]
 pub enum AppMsg {
     Confirm { user: String, password: String },
     Cancel,
-    AuthEvent(AuthenticationEvent),
+    AuthEvent(AuthenticationAgentEvent),
 }
 
 pub struct App {
@@ -21,15 +21,17 @@ pub struct App {
     cookie: Option<String>,
     retry_message: Option<String>,
     authenticating: bool,
-    tx: broadcast::Sender<AuthenticationEvent>, // chosen_identity: Option<String>,
-                                                // password_buffer: Option<String>,
+    sender: mpsc::Sender<AuthenticationUserEvent>, // chosen_identity: Option<String>,
 }
 
 #[relm4::component(async, pub)]
 impl AsyncComponent for App {
     type Input = AppMsg;
     type Output = ();
-    type Init = broadcast::Sender<AuthenticationEvent>;
+    type Init = (
+        mpsc::Sender<AuthenticationUserEvent>,
+        mpsc::Receiver<AuthenticationAgentEvent>,
+    );
     type CommandOutput = ();
 
     view! {
@@ -156,7 +158,7 @@ impl AsyncComponent for App {
         let model = App {
             message: String::from(""),
             identities: Vec::new(),
-            tx: init,
+            sender: init.0,
             cookie: None,
             authenticating: false,
             retry_message: None,
@@ -165,12 +167,10 @@ impl AsyncComponent for App {
         spawn_future_local(clone!(
             #[strong]
             sender,
-            #[strong(rename_to = tx)]
-            model.tx,
             async move {
-                let mut rx = tx.subscribe();
+                let mut receiver = init.1;
                 loop {
-                    let event = rx.recv().await.expect("Somehow the channel closed");
+                    let event = receiver.recv().await.expect("Somehow the channel closed");
                     tracing::debug!("recieved event {:#?}", event);
 
                     sender.input(AppMsg::AuthEvent(event));
@@ -189,15 +189,16 @@ impl AsyncComponent for App {
         _sender: AsyncComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        match message {
+        match &message {
             AppMsg::Confirm { user, password } => {
                 if let Some(cookie) = self.cookie.clone() {
-                    self.tx
-                        .send(AuthenticationEvent::UserProvidedPassword {
+                    self.sender
+                        .send(AuthenticationUserEvent::ProvidedPassword {
                             cookie,
-                            username: user,
-                            password,
+                            username: user.clone(),
+                            password: password.clone(),
                         })
+                        .await
                         .unwrap();
                     self.retry_message = Some(String::from("Authenticating..."));
                     self.authenticating = true;
@@ -205,8 +206,9 @@ impl AsyncComponent for App {
             }
             AppMsg::Cancel => {
                 if let Some(cookie) = self.cookie.clone() {
-                    self.tx
-                        .send(AuthenticationEvent::UserCanceled { cookie })
+                    self.sender
+                        .send(AuthenticationUserEvent::Canceled { cookie })
+                        .await
                         .unwrap();
                     self.cookie = None;
                     self.message = String::new();
@@ -216,23 +218,21 @@ impl AsyncComponent for App {
                 }
             }
             AppMsg::AuthEvent(ev) => match ev {
-                AuthenticationEvent::Started {
+                AuthenticationAgentEvent::Started {
                     cookie,
                     message,
-                    retry_message,
                     names,
                 } => {
                     if self.cookie.is_none() {
-                        self.cookie = Some(cookie);
-                        self.message = message;
-                        self.identities = names;
+                        self.cookie = Some(cookie.clone());
+                        self.message = message.clone();
+                        self.identities = names.clone();
                         self.authenticating = false;
-                        self.retry_message = retry_message;
+                        self.retry_message = None;
                     }
                 }
-                AuthenticationEvent::Canceled { cookie }
-                | AuthenticationEvent::UserCanceled { cookie } => {
-                    if let Some(c) = self.cookie.clone() {
+                AuthenticationAgentEvent::Canceled { cookie } => {
+                    if let Some(c) = &self.cookie {
                         if c == cookie {
                             self.cookie = None;
                             self.message = String::new();
@@ -242,8 +242,8 @@ impl AsyncComponent for App {
                         }
                     }
                 }
-                AuthenticationEvent::AuthorizationSucceeded { cookie } => {
-                    if let Some(c) = self.cookie.clone() {
+                AuthenticationAgentEvent::AuthorizationSucceeded { cookie } => {
+                    if let Some(c) = &self.cookie {
                         if c == cookie {
                             tracing::debug!("Authentication succeeded, closing window.");
                             self.cookie = None;
@@ -254,18 +254,17 @@ impl AsyncComponent for App {
                         }
                     }
                 }
-                AuthenticationEvent::AuthorizationRetry {
+                AuthenticationAgentEvent::AuthorizationRetry {
                     cookie,
                     retry_message,
                 } => {
                     if let Some(c) = &self.cookie {
-                        if *c == cookie {
-                            self.retry_message = retry_message;
+                        if c == cookie {
+                            self.retry_message = retry_message.clone();
                             self.authenticating = false;
                         }
                     }
                 }
-                _ => (),
             },
         }
     }

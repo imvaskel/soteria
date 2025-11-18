@@ -2,25 +2,34 @@ use std::{collections::HashMap, process::Stdio};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process,
-    sync::broadcast,
+    sync::mpsc,
 };
 use zbus::{interface, zvariant::Value};
 
 use crate::{
     authority::{Identity, PolkitError, Result},
     config::SystemConfig,
-    events::AuthenticationEvent,
+    events::{AuthenticationAgentEvent, AuthenticationUserEvent},
 };
 
 #[derive(Debug)]
 pub struct AuthenticationAgent {
     config: SystemConfig,
-    sender: broadcast::Sender<AuthenticationEvent>,
+    sender: mpsc::Sender<AuthenticationAgentEvent>,
+    receiver: mpsc::Receiver<AuthenticationUserEvent>,
 }
 
 impl AuthenticationAgent {
-    pub fn new(sender: broadcast::Sender<AuthenticationEvent>, config: SystemConfig) -> Self {
-        Self { sender, config }
+    pub fn new(
+        sender: mpsc::Sender<AuthenticationAgentEvent>,
+        receiver: mpsc::Receiver<AuthenticationUserEvent>,
+        config: SystemConfig,
+    ) -> Self {
+        Self {
+            sender,
+            receiver,
+            config,
+        }
     }
 }
 
@@ -28,15 +37,16 @@ impl AuthenticationAgent {
 impl AuthenticationAgent {
     async fn cancel_authentication(&self, cookie: &str) {
         tracing::debug!("Recieved request to cancel authentication for {}", cookie);
-        let tx = self.sender.clone();
-        tx.send(AuthenticationEvent::Canceled {
-            cookie: cookie.to_owned(),
-        })
-        .unwrap();
+        self.sender
+            .send(AuthenticationAgentEvent::Canceled {
+                cookie: cookie.to_owned(),
+            })
+            .await
+            .unwrap();
     }
 
     async fn begin_authentication(
-        &self,
+        &mut self,
         action_id: &str,
         message: &str,
         icon_name: &str,
@@ -63,37 +73,33 @@ impl AuthenticationAgent {
         }
 
         self.sender
-            .send(AuthenticationEvent::Started {
+            .send(AuthenticationAgentEvent::Started {
                 cookie: cookie.to_string(),
                 message: message.to_string(),
-                retry_message: None,
                 names,
             })
+            .await
             .map_err(|_| PolkitError::Failed("Failed to send data.".to_string()))?;
 
-        let mut rx = self.sender.subscribe();
-
         loop {
-            match rx
-                .recv()
-                .await
-                .map_err(|_| PolkitError::Failed("Failed to recieve data.".to_string()))?
-            {
-                AuthenticationEvent::UserCanceled { cookie: c } => {
+            match &self.receiver.recv().await.ok_or_else(|| {
+                PolkitError::Failed("Failed to recieve data. channel closed".to_string())
+            })? {
+                AuthenticationUserEvent::Canceled { cookie: c } => {
                     if c == cookie {
                         return Err(PolkitError::Cancelled(
                             "User cancelled the authentication.".to_string(),
                         ));
                     }
                 }
-                AuthenticationEvent::UserProvidedPassword {
+                AuthenticationUserEvent::ProvidedPassword {
                     cookie: c,
                     username: user,
                     password: pw,
                 } => {
                     if c == cookie {
                         let mut child = process::Command::new(self.config.get_helper_path())
-                            .arg(&user)
+                            .arg(user)
                             .stdin(Stdio::piped())
                             .stdout(Stdio::piped())
                             .spawn()
@@ -134,10 +140,11 @@ impl AuthenticationAgent {
                                 if msg.contains("minute") && msg.contains("unlock") {
                                     last_info = Some(msg.clone());
                                     self.sender
-                                        .send(AuthenticationEvent::AuthorizationRetry {
+                                        .send(AuthenticationAgentEvent::AuthorizationRetry {
                                             cookie: cookie.to_string(),
                                             retry_message: Some(msg),
                                         })
+                                        .await
                                         .unwrap();
                                 }
                             } else if line.starts_with("FAILURE") {
@@ -147,26 +154,28 @@ impl AuthenticationAgent {
                                     "Authentication failed. Please try again.".to_string()
                                 });
                                 self.sender
-                                    .send(AuthenticationEvent::AuthorizationRetry {
+                                    .send(AuthenticationAgentEvent::AuthorizationRetry {
                                         cookie: cookie.to_string(),
                                         retry_message: Some(retry_msg),
                                     })
+                                    .await
                                     .unwrap();
                                 continue;
                             } else if line.starts_with("SUCCESS") {
                                 tracing::debug!("helper replied with success.");
 
                                 self.sender
-                                    .send(AuthenticationEvent::AuthorizationSucceeded {
+                                    .send(AuthenticationAgentEvent::AuthorizationSucceeded {
                                         cookie: cookie.to_string(),
                                     })
+                                    .await
                                     .unwrap();
                                 return Ok(());
                             }
                         }
+                        stdin.flush().await?;
                     }
                 }
-                _ => (),
             }
         }
     }
