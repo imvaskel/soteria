@@ -21,6 +21,8 @@ mod dbus;
 mod events;
 mod ui;
 
+use gettextrs::{bindtextdomain, textdomain};
+
 fn setup_tracing() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
         .with_target(false)
@@ -39,6 +41,13 @@ fn setup_tracing() -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracing()?;
+
+    gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
+
+    let locale_path = std::env::var("SOTERIA_LOCALEDIR").unwrap_or_else(|_| "/usr/share/locale".to_string());
+
+    bindtextdomain("soteria", &locale_path)?;
+    textdomain("soteria")?;
 
     let config_path = std::env::var("XDG_CONFIG_HOME")
         .or(std::env::var("HOME").map(|e| e + "/.config"))
@@ -61,7 +70,8 @@ async fn main() -> Result<()> {
     let (agent_sender, agent_receiver) = channel::<AuthenticationAgentEvent>(32);
     let (user_sender, user_receiver) = channel::<AuthenticationUserEvent>(32);
 
-    let locale = "en_US.UTF-8"; // TODO: Needed?
+    let locale = gtk4::glib::language_names()[0].as_str().to_string();
+    tracing::info!("Registering authentication agent with locale: {}", locale);
     let subject_kind = "unix-session".to_string();
 
     let subject_details = HashMap::from([(
@@ -81,7 +91,7 @@ async fn main() -> Result<()> {
 
     let proxy = AuthorityProxy::new(&connection).await?;
     proxy
-        .register_authentication_agent(&subject, locale, constants::SELF_OBJECT_PATH)
+        .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
         .await?;
 
     tracing::info!("Registered as authentication provider.");

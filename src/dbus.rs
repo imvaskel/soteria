@@ -1,3 +1,4 @@
+use gettextrs::gettext;
 use std::{collections::HashMap, process::Stdio};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -100,6 +101,7 @@ impl AuthenticationAgent {
                     if c == cookie {
                         let mut child = process::Command::new(self.config.get_helper_path())
                             .arg(user)
+                            .env("LC_ALL", "C")
                             .stdin(Stdio::piped())
                             .stdout(Stdio::piped())
                             .spawn()
@@ -151,7 +153,7 @@ impl AuthenticationAgent {
                                 tracing::debug!("helper replied with failure.");
 
                                 let retry_msg = last_info.clone().unwrap_or_else(|| {
-                                    "Authentication failed. Please try again.".to_string()
+                                    gettext("Authentication failed. Please try again.")
                                 });
                                 self.sender
                                     .send(AuthenticationAgentEvent::AuthorizationRetry {
