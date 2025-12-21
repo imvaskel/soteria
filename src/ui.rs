@@ -25,6 +25,7 @@ pub struct App {
     sender: mpsc::Sender<AuthenticationUserEvent>, // chosen_identity: Option<String>,
 }
 
+#[allow(unused_assignments)]
 #[relm4::component(async, pub)]
 impl AsyncComponent for App {
     type Input = AppMsg;
