@@ -44,7 +44,8 @@ async fn main() -> Result<()> {
 
     gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
 
-    let locale_path = std::env::var("SOTERIA_LOCALEDIR").unwrap_or_else(|_| "/usr/share/locale".to_string());
+    let locale_path =
+        std::env::var("SOTERIA_LOCALEDIR").unwrap_or_else(|_| "/usr/share/locale".to_string());
 
     bindtextdomain("soteria", &locale_path)?;
     textdomain("soteria")?;
