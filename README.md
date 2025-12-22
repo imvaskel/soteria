@@ -67,16 +67,20 @@ cd soteria
 # Install binary
 cargo install --locked --path .
 
-# Install translations (system-wide)
-sudo sh -c 'for file in po/*.po; do \
+# Install translations (locally)
+mkdir -p ~/.local/share/locales
+for file in po/*.po; do \
     lang=${file%.*}; \
-    mkdir -p /usr/share/locale/${lang#po/}/LC_MESSAGES; \
-    msgfmt $file -o /usr/share/locale/${lang#po/}/LC_MESSAGES/soteria.mo; \
-done'
+    mkdir -p ~/.local/share/locales/${lang#po/}/LC_MESSAGES; \
+    msgfmt $file -o ~/.local/share/locales/${lang#po/}/LC_MESSAGES/soteria.mo; \
+done
+
+# Run with local translations
+SOTERIA_LOCALEDIR=~/.local/share/locales soteria
 ```
 
 > [!NOTE]
-> Translations are installed to `/usr/share/locale` by default. Use `SOTERIA_LOCALEDIR` to override this path if needed.
+> By default, Soteria looks for translations in `/usr/share/locale`. Use `SOTERIA_LOCALEDIR` to override this path, as shown above.
 
 This should place Soteria into ~/.cargo/bin and you can run it from there.
 
