@@ -26,3 +26,6 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 zeroize = { version = "1.8.2", features = ["zeroize_derive"] }
+
+[features]
+libadwaita = ["relm4/libadwaita"]

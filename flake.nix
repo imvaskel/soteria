@@ -22,13 +22,14 @@
       craneLib = crane.mkLib pkgs;
     in {
       soteria = pkgs.callPackage ./package.nix {inherit craneLib;};
+      soteria-libadwaita = self.packages.${system}.soteria.override {withLibadwaita = true;};
       default = self.packages.${system}.soteria;
     });
 
     devShells = forEachSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       craneLib = crane.mkLib pkgs;
-      soteria = self.packages.${system}.default;
+      soteria = self.packages.${system}.soteria-libadwaita;
       buildDeps = soteria.nativeBuildInputs ++ soteria.buildInputs;
     in {
       default = craneLib.devShell {

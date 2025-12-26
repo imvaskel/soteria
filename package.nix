@@ -9,6 +9,8 @@
   glib,
   gtk4,
   pango,
+  withLibadwaita ? false,
+  libadwaita,
   polkit,
   libiconv,
   ...
@@ -40,9 +42,14 @@ in
         gtk4
         pango
       ]
+      ++ lib.optionals withLibadwaita [
+        libadwaita
+      ]
       ++ lib.optionals stdenv.isDarwin [
         libiconv
       ];
+
+    cargoExtraArgs = lib.optionalString withLibadwaita "--features libadwaita";
 
     #  Takes advantage of nixpkgs manually editing PACKAGE_PREFIX by grabbing it from
     #  the binary itself.
