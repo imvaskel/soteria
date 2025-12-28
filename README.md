@@ -5,7 +5,6 @@
 Soteria is a Polkit authentication agent written in GTK designed to be used with any desktop environment.
 
 <img alt="Example authentication popup" src=".github/example_popup.png" width=50% height=50% ></image>
-<img alt="Failed authentication popup" src=".github/example_failed.png" width=50% height=50% ></image>
 
 [Installation](#installation) •
 [Why?](#why) •
@@ -48,29 +47,40 @@ This should place Soteria into `/usr/lib/soteria-polkit/soteria`
 Soteria is available as `soteria`. There is a also NixOS module to enable it under ``security.soteria.enable``.
 
 ### Manual Installation
-
-Soteria requires GTK >= 4.10. Debian based distros will need `libgtk-4-dev`, and Fedora
-based distros will need `gtk4-devel`.
-
-Additionally, you will need `polkit` and `libpolkit-agent` installed.
-(`libpolkit-agent` should be shipped with `polkit`).
+    
+#### Requirements
+Soteria requires Rust >= 1.85 (edition 2024), GTK4 development headers (`libgtk-4-dev` / `gtk4-devel`), Polkit development headers (`libpolkit-agent-1-dev`), and `gettext` for compiling translations.
 
 > [!NOTE]
-> If the executable `polkit-agent-helper-1`
-> is in a non-standard location (i.e. not `/usr/lib/polkit/polkit-agent-helper-1`), then you should also set up a configuration file
-> at either ``/usr/local/etc/soteria/config.toml`` or ``/etc/soteria/config.toml`` with
+> If your `polkit-agent-helper-1` executable is in a non-standard location (i.e. not `/usr/lib/polkit/polkit-agent-helper-1`), 
+> you should set up a configuration file at `~/.config/soteria/config.toml` (or `/etc/soteria/config.toml`) with:
 > ```toml
 > helper_path = "/path/to/your/helper"
 > ```
-> as the contents.
 
-Soteria will also need Rust. Currently the only requirement is a compiler that supports the ``edition = 2024``.  (1.85 or newer).
-
-Run the following commmand to build and install Soteria:
+Run the following commands to build and install Soteria:
 
 ```bash
-cargo install --locked --git https://github.com/imvaskel/soteria
+git clone https://github.com/imvaskel/soteria
+cd soteria
+
+# Install binary
+cargo install --locked --path .
+
+# Install translations (locally)
+mkdir -p ~/.local/share/locales
+for file in po/*.po; do \
+    lang=${file%.*}; \
+    mkdir -p ~/.local/share/locales/${lang#po/}/LC_MESSAGES; \
+    msgfmt $file -o ~/.local/share/locales/${lang#po/}/LC_MESSAGES/soteria.mo; \
+done
+
+# Run with local translations
+SOTERIA_LOCALEDIR=~/.local/share/locales soteria
 ```
+
+> [!NOTE]
+> By default, Soteria looks for translations in `/usr/share/locale`. Use `SOTERIA_LOCALEDIR` to override this path, as shown above.
 
 This should place Soteria into ~/.cargo/bin and you can run it from there.
 

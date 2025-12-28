@@ -1,3 +1,4 @@
+use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk4::{
     glib::{clone, spawn_future_local},
@@ -24,6 +25,7 @@ pub struct App {
     sender: mpsc::Sender<AuthenticationUserEvent>, // chosen_identity: Option<String>,
 }
 
+#[allow(unused_assignments)]
 #[relm4::component(async, pub)]
 impl AsyncComponent for App {
     type Input = AppMsg;
@@ -59,7 +61,7 @@ impl AsyncComponent for App {
                 set_orientation: gtk::Orientation::Vertical,
 
                 gtk::Label {
-                    set_markup: r#"<b><span size='x-large'>Authentication Required</span></b>"#,
+                    set_markup: &format!(r#"<b><span size='x-large'>{}</span></b>"#, gettext("Authentication Required")),
                     set_margin_horizontal: 16,
                     set_margin_vertical: 16,
                     set_halign: gtk::Align::Center,
@@ -106,7 +108,7 @@ impl AsyncComponent for App {
                 #[name = "password_entry"]
                 gtk::PasswordEntry {
                     set_hexpand: true,
-                    set_placeholder_text: Some( "Password" ),
+                    set_placeholder_text: Some( &gettext("Password") ),
                     set_show_peek_icon: true,
                     #[watch]
                     set_editable: !model.authenticating,
@@ -126,7 +128,7 @@ impl AsyncComponent for App {
                     set_vexpand: true,
 
                     #[name = "cancel_button"]
-                    append = &gtk::Button::with_label("Cancel"){
+                    append = &gtk::Button::with_label(&gettext("Cancel")){
                         connect_clicked[sender, password_entry] => move |_| {
 
                             sender.input(AppMsg::Cancel);
@@ -135,7 +137,7 @@ impl AsyncComponent for App {
                     },
 
                     #[name = "confirm_button"]
-                    append = &gtk::Button::with_label("Confirm") {
+                    append = &gtk::Button::with_label(&gettext("Confirm")) {
                         connect_clicked[sender, identity_dropdown, password_entry] => move |_| {
                             let user: gtk::StringObject = identity_dropdown.selected_item().unwrap().dynamic_cast().unwrap();
 
@@ -200,7 +202,7 @@ impl AsyncComponent for App {
                         })
                         .await
                         .unwrap();
-                    self.retry_message = Some(String::from("Authenticating..."));
+                    self.retry_message = Some(gettext("Authenticating..."));
                     self.authenticating = true;
                 }
             }
