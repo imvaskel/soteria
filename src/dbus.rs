@@ -2,6 +2,7 @@ use gettextrs::gettext;
 use std::{collections::HashMap, process::Stdio};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    net::UnixStream,
     process,
     sync::mpsc,
 };
@@ -99,32 +100,52 @@ impl AuthenticationAgent {
                     password: pw,
                 } => {
                     if c == cookie {
-                        let mut child = process::Command::new(self.config.get_helper_path())
-                            .arg(user)
-                            .env("LC_ALL", "C")
-                            .stdin(Stdio::piped())
-                            .stdout(Stdio::piped())
-                            .spawn()
-                            .map_err(|_| {
-                                PolkitError::Failed(
-                                    "Failed to the spawn polkit authentication helper.".to_string(),
-                                )
-                            })?;
+                        let (reader, mut writer): (
+                            BufReader<Box<dyn tokio::io::AsyncRead + Unpin + Send>>,
+                            Box<dyn tokio::io::AsyncWrite + Unpin + Send>,
+                        );
 
-                        let mut stdin = child
-                            .stdin
-                            .take()
-                            .ok_or(PolkitError::Failed("Child did not have stdin.".to_string()))?;
-                        let stdout = child.stdout.take().ok_or(PolkitError::Failed(
-                            "Child did not have stdout.".to_string(),
-                        ))?;
+                        if let Ok(stream) =
+                            UnixStream::connect("/run/polkit/agent-helper.socket").await
+                        {
+                            let (read_half, mut write_half) = stream.into_split();
+                            write_half.write_all(user.as_bytes()).await?;
+                            write_half.write_all(b"\n").await?;
+                            write_half.write_all(cookie.as_bytes()).await?;
+                            write_half.write_all(b"\n").await?;
 
-                        stdin.write_all(cookie.as_bytes()).await?;
-                        stdin.write_all(b"\n").await?;
+                            reader = BufReader::new(Box::new(read_half));
+                            writer = Box::new(write_half);
+                        } else {
+                            let mut child = process::Command::new(self.config.get_helper_path())
+                                .arg(user)
+                                .env("LC_ALL", "C")
+                                .stdin(Stdio::piped())
+                                .stdout(Stdio::piped())
+                                .spawn()
+                                .map_err(|_| {
+                                    PolkitError::Failed(
+                                        "Failed to the spawn polkit authentication helper."
+                                            .to_string(),
+                                    )
+                                })?;
+
+                            let mut stdin = child.stdin.take().ok_or(PolkitError::Failed(
+                                "Child did not have stdin.".to_string(),
+                            ))?;
+                            let stdout = child.stdout.take().ok_or(PolkitError::Failed(
+                                "Child did not have stdout.".to_string(),
+                            ))?;
+
+                            stdin.write_all(cookie.as_bytes()).await?;
+                            stdin.write_all(b"\n").await?;
+
+                            reader = BufReader::new(Box::new(stdout));
+                            writer = Box::new(stdin);
+                        }
 
                         let mut last_info: Option<String> = None;
 
-                        let reader = BufReader::new(stdout);
                         let mut lines = reader.lines();
                         while let Some(line) = lines.next_line().await? {
                             tracing::debug!("helper stdout: {}", line);
@@ -132,8 +153,8 @@ impl AuthenticationAgent {
                                 tracing::debug!("recieved request from helper: '{}'", sliced);
                                 if sliced.trim() == "Password:" {
                                     tracing::debug!(pw = pw);
-                                    stdin.write_all(pw.as_bytes()).await?;
-                                    stdin.write_all(b"\n").await?;
+                                    writer.write_all(pw.as_bytes()).await?;
+                                    writer.write_all(b"\n").await?;
                                 }
                             } else if let Some(info) = line.strip_prefix("PAM_TEXT_INFO") {
                                 let msg = info.trim().to_string();
@@ -175,7 +196,7 @@ impl AuthenticationAgent {
                                 return Ok(());
                             }
                         }
-                        stdin.flush().await?;
+                        writer.flush().await?;
                     }
                 }
             }
