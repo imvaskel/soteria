@@ -15,8 +15,18 @@ pub struct SystemConfig {
 impl SystemConfig {
     pub fn from_file() -> Result<Self> {
         let mut fig = Figment::new();
+        // Prioritize XDG_CONFIG_HOME (user config), defaulting to $HOME/.config
+        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME")
+            .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".config").into()));
+        let xdg_path = xdg_config_home.map(|c| Path::new(&c).join("soteria/config.toml"));
+
+        if xdg_path.as_ref().is_some_and(|p| p.exists()) {
+            let path = xdg_path.unwrap();
+            fig = fig.merge(Toml::file_exact(path.clone()));
+            tracing::info!("using configuration file found at {}", path.display());
+        }
         // Prioritize configuration in local, as semantically that is the users config
-        if Path::new("/usr/local/etc/soteria/config.toml").exists() {
+        else if Path::new("/usr/local/etc/soteria/config.toml").exists() {
             fig = fig.merge(Toml::file_exact("/usr/local/etc/soteria/config.toml"));
             tracing::info!("using configuration file found at /usr/local/etc/soteria/config.toml");
         // Try the configuration location of the distro
