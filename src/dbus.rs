@@ -152,7 +152,7 @@ impl AuthenticationAgent {
                             if let Some(sliced) = line.strip_prefix("PAM_PROMPT_ECHO_OFF") {
                                 tracing::debug!("recieved request from helper: '{}'", sliced);
                                 if sliced.trim() == "Password:" {
-                                    tracing::debug!(pw = pw);
+                                    tracing::debug!("helper replied with request for password");
                                     writer.write_all(pw.as_bytes()).await?;
                                     writer.write_all(b"\n").await?;
                                 }
