@@ -100,22 +100,21 @@ impl AuthenticationAgent {
                     password: pw,
                 } => {
                     if c == cookie {
+                        let mut stream =
+                            UnixStream::connect("/run/polkit/agent-helper.socket").await;
+
                         let (reader, mut writer): (
                             BufReader<Box<dyn tokio::io::AsyncRead + Unpin + Send>>,
                             Box<dyn tokio::io::AsyncWrite + Unpin + Send>,
-                        );
+                        ) = if let Ok(stream) = &mut stream {
+                            let (read_half, mut write_half) = stream.split();
 
-                        if let Ok(stream) =
-                            UnixStream::connect("/run/polkit/agent-helper.socket").await
-                        {
-                            let (read_half, mut write_half) = stream.into_split();
                             write_half.write_all(user.as_bytes()).await?;
                             write_half.write_all(b"\n").await?;
                             write_half.write_all(cookie.as_bytes()).await?;
                             write_half.write_all(b"\n").await?;
 
-                            reader = BufReader::new(Box::new(read_half));
-                            writer = Box::new(write_half);
+                            (BufReader::new(Box::new(read_half)), Box::new(write_half))
                         } else {
                             let mut child = process::Command::new(self.config.get_helper_path())
                                 .arg(user)
@@ -140,9 +139,8 @@ impl AuthenticationAgent {
                             stdin.write_all(cookie.as_bytes()).await?;
                             stdin.write_all(b"\n").await?;
 
-                            reader = BufReader::new(Box::new(stdout));
-                            writer = Box::new(stdin);
-                        }
+                            (BufReader::new(Box::new(stdout)), Box::new(stdin))
+                        };
 
                         let mut last_info: Option<String> = None;
 
