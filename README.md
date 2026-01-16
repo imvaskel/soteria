@@ -49,7 +49,7 @@ Soteria is available as `soteria`. There is a also NixOS module to enable it und
 ### Manual Installation
     
 #### Requirements
-Soteria requires Rust >= 1.85 (edition 2024), GTK4 development headers (`libgtk-4-dev` / `gtk4-devel`), Polkit development headers (`libpolkit-agent-1-dev`), and `gettext` for compiling translations.
+Soteria requires Rust >= 1.85 (edition 2024), GTK4 development headers (`libgtk-4-dev` / `gtk4-devel`), Polkit development headers (`libpolkit-agent-1-dev`), and `gettext` for compiling translations (optional, only if you want them).
 
 > [!NOTE]
 > If your `polkit-agent-helper-1` executable is in a non-standard location (i.e. not `/usr/lib/polkit/polkit-agent-helper-1`), 
@@ -67,7 +67,7 @@ cd soteria
 # Install binary
 cargo install --locked --path .
 
-# Install translations (locally)
+# Install translations (locally, optional)
 mkdir -p ~/.local/share/locales
 for file in po/*.po; do \
     lang=${file%.*}; \
