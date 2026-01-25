@@ -3,6 +3,7 @@ use dbus::AuthenticationAgent;
 use eyre::{Result, WrapErr, ensure};
 use relm4::RelmApp;
 use std::collections::HashMap;
+use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
 use tokio::sync::mpsc::channel;
 use tracing::level_filters::LevelFilter;
@@ -58,15 +59,22 @@ async fn main() -> Result<()> {
 
     let config: SystemConfig = SystemConfig::from_file()?;
 
-    ensure!(
-        Path::new(config.get_helper_path()).exists(),
-        "Authentication helper located at {} does not exist.",
-        config.get_helper_path()
-    );
-    tracing::info!(
-        "using authentication helper located at {}",
-        config.get_helper_path()
-    );
+    let socket = Path::new("/run/polkit/agent-helper.socket");
+    if socket.exists() && socket.metadata().is_ok_and(|m| m.file_type().is_socket()) {
+        tracing::info!(
+            "using authentication helper socket located at /run/polkit/agent-helper.socket"
+        );
+    } else {
+        ensure!(
+            Path::new(config.get_helper_path()).exists(),
+            "Authentication helper located at {} does not exist.",
+            config.get_helper_path()
+        );
+        tracing::info!(
+            "using authentication helper located at {}",
+            config.get_helper_path()
+        );
+    }
 
     let (agent_sender, agent_receiver) = channel::<AuthenticationAgentEvent>(32);
     let (user_sender, user_receiver) = channel::<AuthenticationUserEvent>(32);
