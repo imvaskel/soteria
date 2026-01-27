@@ -100,8 +100,7 @@ impl AuthenticationAgent {
                     password: pw,
                 } => {
                     if c == cookie {
-                        let mut stream =
-                            UnixStream::connect("/run/polkit/agent-helper.socket").await;
+                        let mut stream = UnixStream::connect(self.config.get_socket_path()).await;
 
                         let (reader, mut writer): (
                             BufReader<Box<dyn tokio::io::AsyncRead + Unpin + Send>>,

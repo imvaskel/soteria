@@ -58,15 +58,21 @@ async fn main() -> Result<()> {
 
     let config: SystemConfig = SystemConfig::from_file()?;
 
+    let agent_helper = Path::new(config.get_helper_path());
+    let agent_socket = Path::new(config.get_socket_path());
+
     ensure!(
-        Path::new(config.get_helper_path()).exists(),
-        "Authentication helper located at {} does not exist.",
-        config.get_helper_path()
+        agent_helper.exists() || agent_socket.exists(),
+        "Helper located at {} and socket located at {} do not exist.",
+        &agent_helper.display(),
+        &agent_socket.display()
     );
-    tracing::info!(
-        "using authentication helper located at {}",
-        config.get_helper_path()
-    );
+
+    if agent_socket.exists() {
+        tracing::info!("using agent socket at {}", &agent_socket.display());
+    } else {
+        tracing::info!("using agent helper at {}", &agent_helper.display());
+    }
 
     let (agent_sender, agent_receiver) = channel::<AuthenticationAgentEvent>(32);
     let (user_sender, user_receiver) = channel::<AuthenticationUserEvent>(32);

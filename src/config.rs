@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SystemConfig {
     helper_path: String,
+    socket_path: String,
 }
 
 impl SystemConfig {
@@ -44,12 +45,17 @@ impl SystemConfig {
     pub fn get_helper_path(&self) -> &str {
         &self.helper_path
     }
+
+    pub fn get_socket_path(&self) -> &str {
+        &self.socket_path
+    }
 }
 
 impl Default for SystemConfig {
     fn default() -> Self {
         Self {
             helper_path: env!("POLKIT_AGENT_HELPER_PATH").into(),
+            socket_path: env!("POLKIT_AGENT_SOCKET_PATH").into(),
         }
     }
 }
