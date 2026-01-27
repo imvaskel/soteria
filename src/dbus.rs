@@ -38,7 +38,7 @@ impl AuthenticationAgent {
 #[interface(name = "org.freedesktop.PolicyKit1.AuthenticationAgent")]
 impl AuthenticationAgent {
     async fn cancel_authentication(&self, cookie: &str) {
-        tracing::debug!("Recieved request to cancel authentication for {}", cookie);
+        tracing::debug!("received request to cancel authentication for {}", cookie);
         self.sender
             .send(AuthenticationAgentEvent::Canceled {
                 cookie: cookie.to_owned(),
@@ -56,7 +56,7 @@ impl AuthenticationAgent {
         cookie: &str,
         identities: Vec<Identity<'_>>,
     ) -> Result<()> {
-        tracing::info!("recieved request to authenticate");
+        tracing::info!("received request to authenticate");
         tracing::debug!(action_id = action_id, message = message, icon_name = icon_name, details = ?details, cookie = cookie, identities = ?identities);
 
         let mut names: Vec<String> = Vec::new();
@@ -85,7 +85,7 @@ impl AuthenticationAgent {
 
         loop {
             match &self.receiver.recv().await.ok_or_else(|| {
-                PolkitError::Failed("Failed to recieve data. channel closed".to_string())
+                PolkitError::Failed("Failed to receive data. channel closed".to_string())
             })? {
                 AuthenticationUserEvent::Canceled { cookie: c } => {
                     if c == cookie {
@@ -147,7 +147,7 @@ impl AuthenticationAgent {
                         while let Some(line) = lines.next_line().await? {
                             tracing::debug!("helper stdout: {}", line);
                             if let Some(sliced) = line.strip_prefix("PAM_PROMPT_ECHO_OFF") {
-                                tracing::debug!("recieved request from helper: '{}'", sliced);
+                                tracing::debug!("received request from helper: '{}'", sliced);
                                 if sliced.trim() == "Password:" {
                                     tracing::debug!("helper replied with request for password");
                                     writer.write_all(pw.as_bytes()).await?;
