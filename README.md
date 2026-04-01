@@ -23,6 +23,9 @@ Soteria is a Polkit authentication agent written in GTK designed to be used with
 > ```
 > For more info, see NixOS/nixpkgs#373290.
 
+> [!WARNING]
+> Non-manual installations (NixOS, Arch) are community maintained, not by me. You should always audit packages that you install from non-official sources. Check out Manual Installation for how to manually install the package. 
+
 ### Arch Linux
 
 Soteria is available on the [AUR](https://aur.archlinux.org/packages/soteria-git) as `soteria-git`
