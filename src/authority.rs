@@ -78,7 +78,7 @@ impl std::fmt::Display for Identity<'_> {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Type)]
+#[derive(Clone, Debug, Deserialize, Serialize, Type)]
 pub struct Subject<'a> {
     kind: String,
     #[serde(borrow)]

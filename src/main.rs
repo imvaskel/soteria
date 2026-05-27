@@ -1,6 +1,8 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
 use eyre::{Result, WrapErr, ensure};
+use futures_lite::StreamExt;
+use gtk4::glib::{clone, spawn_future_local};
 use relm4::RelmApp;
 use std::collections::HashMap;
 use std::path::Path;
@@ -101,7 +103,27 @@ async fn main() -> Result<()> {
         .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
         .await?;
 
-    tracing::info!("Registered as authentication provider.");
+    tracing::info!("Registered as authentication agent.");
+
+    let mut owner_change_signal = proxy
+        .inner()
+        .receive_owner_changed()
+        .await
+        .context("Could not get the signal for owner change?")?;
+    spawn_future_local(clone!(async move {
+        while let Some(result) = owner_change_signal.next().await {
+            // if we can get a UniqueName out of the stream, then polkit has restarted for some reason & we should reregister
+            if let Some(_) = result {
+                tracing::info!(
+                    "Polkit's owner has changed, assuming the process restarted and reregistering."
+                );
+                proxy
+                    .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
+                    .await.context("Somehow failed to reregister ourselves?").unwrap();
+                tracing::info!("Reregistered as authentication agent.")
+            }
+        }
+    }));
 
     let app = RelmApp::new("gay.vaskel.soteria");
     if path.is_file() {
