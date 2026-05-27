@@ -101,7 +101,15 @@ impl AsyncComponent for App {
                         set_margin_bottom: 8,
                         set_hexpand: true,
                         #[watch]
-                        set_model: Some( &gtk::StringList::new(&model.identities.iter().map(AsRef::as_ref).collect::<Vec<_>>()) )
+                        set_model: Some( &gtk::StringList::new(&model.identities.iter().map(AsRef::as_ref).collect::<Vec<_>>()) ),
+                        #[watch]
+                        set_selected: {
+                            if let Ok(username) = whoami::username() {
+                                model.identities.iter().position(|n| n == &username).unwrap_or(0) as u32
+                            } else { 0 }
+
+                        }
+
                     }
                 },
 

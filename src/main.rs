@@ -113,13 +113,15 @@ async fn main() -> Result<()> {
     spawn_future_local(clone!(async move {
         while let Some(result) = owner_change_signal.next().await {
             // if we can get a UniqueName out of the stream, then polkit has restarted for some reason & we should reregister
-            if let Some(_) = result {
+            if result.is_some() {
                 tracing::info!(
                     "Polkit's owner has changed, assuming the process restarted and reregistering."
                 );
                 proxy
                     .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
-                    .await.context("Somehow failed to reregister ourselves?").unwrap();
+                    .await
+                    .context("Somehow failed to reregister ourselves?")
+                    .unwrap();
                 tracing::info!("Reregistered as authentication agent.")
             }
         }

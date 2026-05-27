@@ -28,3 +28,4 @@ tracing-subscriber = { version = "0.3.18", features = [
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 zeroize = { version = "1.8.2", features = ["zeroize_derive"] }
 futures-lite = "2.6.1"
+whoami = { version = "2.1.2", features = ["std"], default-features = false }
