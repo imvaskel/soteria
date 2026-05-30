@@ -44,8 +44,7 @@ impl AsyncComponent for App {
             set_resizable: false,
             set_modal: true,
             set_hide_on_close: true,
-            #[watch]
-            set_visible: model.cookie.is_some(),
+            set_visible: false,
 
             connect_show[password_entry] => move |_| {
                 password_entry.grab_focus();
@@ -197,7 +196,7 @@ impl AsyncComponent for App {
         &mut self,
         message: Self::Input,
         _sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match &message {
             AppMsg::Confirm { user, password } => {
@@ -225,6 +224,8 @@ impl AsyncComponent for App {
                     self.retry_message = Some(String::new());
                     self.authenticating = false;
                     self.identities = Vec::new();
+
+                    root.close();
                 }
             }
             AppMsg::AuthEvent(ev) => match ev {
@@ -239,6 +240,8 @@ impl AsyncComponent for App {
                         self.identities = names.clone();
                         self.authenticating = false;
                         self.retry_message = None;
+
+                        root.present();
                     }
                 }
                 AuthenticationAgentEvent::Canceled { cookie } => {
@@ -249,6 +252,8 @@ impl AsyncComponent for App {
                             self.identities = Vec::new();
                             self.retry_message = None;
                             self.authenticating = false;
+
+                            root.close();
                         }
                     }
                 }
@@ -261,6 +266,8 @@ impl AsyncComponent for App {
                             self.identities.clear();
                             self.retry_message = None;
                             self.authenticating = false;
+
+                            root.close();
                         }
                     }
                 }
