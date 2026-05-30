@@ -104,8 +104,9 @@ impl AsyncComponent for App {
                         set_model: Some( &gtk::StringList::new(&model.identities.iter().map(AsRef::as_ref).collect::<Vec<_>>()) ),
                         #[watch]
                         set_selected: {
-                            if let Ok(username) = whoami::username() {
-                                model.identities.iter().position(|n| n == &username).unwrap_or(0) as u32
+                            if let Some(Ok(user))
+                            = etc_passwd::Passwd::current_user().ok().flatten().map(|p| p.name.into_string()) {
+                                model.identities.iter().position(|n| n == &user).unwrap_or(0) as u32
                             } else { 0 }
 
                         }
