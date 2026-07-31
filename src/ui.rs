@@ -22,6 +22,7 @@ pub struct App {
     cookie: Option<String>,
     retry_message: Option<String>,
     authenticating: bool,
+    awaiting_password: bool,
     sender: mpsc::Sender<AuthenticationUserEvent>, // chosen_identity: Option<String>,
 }
 
@@ -172,6 +173,7 @@ impl AsyncComponent for App {
             sender: init.0,
             cookie: None,
             authenticating: false,
+            awaiting_password: false,
             retry_message: None,
         };
 
@@ -203,16 +205,22 @@ impl AsyncComponent for App {
         match &message {
             AppMsg::Confirm { user, password } => {
                 if let Some(cookie) = self.cookie.clone() {
-                    self.sender
-                        .send(AuthenticationUserEvent::ProvidedPassword {
+                    let event = if self.awaiting_password {
+                        AuthenticationUserEvent::ProvidedPassword {
+                            cookie,
+                            password: password.clone(),
+                        }
+                    } else {
+                        AuthenticationUserEvent::BeginAuthentication {
                             cookie,
                             username: user.clone(),
-                            password: password.clone(),
-                        })
-                        .await
-                        .unwrap();
+                            password: (!password.is_empty()).then(|| password.clone()),
+                        }
+                    };
+                    self.sender.send(event).await.unwrap();
                     self.retry_message = Some(gettext("Authenticating..."));
                     self.authenticating = true;
+                    self.awaiting_password = false;
                 }
             }
             AppMsg::Cancel => {
@@ -225,6 +233,7 @@ impl AsyncComponent for App {
                     self.message = String::new();
                     self.retry_message = Some(String::new());
                     self.authenticating = false;
+                    self.awaiting_password = false;
                     self.identities = Vec::new();
                 }
             }
@@ -240,6 +249,28 @@ impl AsyncComponent for App {
                         self.identities = names.clone();
                         self.authenticating = false;
                         self.retry_message = None;
+                        self.awaiting_password = false;
+
+                        let current_user = etc_passwd::Passwd::current_user()
+                            .ok()
+                            .flatten()
+                            .and_then(|user| user.name.into_string().ok());
+                        let username = current_user
+                            .filter(|user| self.identities.contains(user))
+                            .or_else(|| self.identities.first().cloned());
+                        if let Some(username) = username {
+                            self.sender
+                                .send(AuthenticationUserEvent::BeginAuthentication {
+                                    cookie: cookie.clone(),
+                                    username,
+                                    password: None,
+                                })
+                                .await
+                                .unwrap();
+                            self.retry_message =
+                                Some(gettext("Waiting for biometric authentication..."));
+                            self.authenticating = true;
+                        }
                     }
                 }
                 AuthenticationAgentEvent::Canceled { cookie } => {
@@ -250,6 +281,7 @@ impl AsyncComponent for App {
                             self.identities = Vec::new();
                             self.retry_message = None;
                             self.authenticating = false;
+                            self.awaiting_password = false;
                         }
                     }
                 }
@@ -262,6 +294,7 @@ impl AsyncComponent for App {
                             self.identities.clear();
                             self.retry_message = None;
                             self.authenticating = false;
+                            self.awaiting_password = false;
                         }
                     }
                 }
@@ -273,7 +306,20 @@ impl AsyncComponent for App {
                         if c == cookie {
                             self.retry_message = retry_message.clone();
                             self.authenticating = false;
+                            self.awaiting_password = false;
                         }
+                    }
+                }
+                AuthenticationAgentEvent::PasswordRequested { cookie, prompt } => {
+                    if self.cookie.as_ref() == Some(cookie) {
+                        self.retry_message = Some(prompt.clone());
+                        self.authenticating = false;
+                        self.awaiting_password = true;
+                    }
+                }
+                AuthenticationAgentEvent::StatusMessage { cookie, message } => {
+                    if self.cookie.as_ref() == Some(cookie) {
+                        self.retry_message = Some(message.clone());
                     }
                 }
             },

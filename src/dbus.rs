@@ -94,12 +94,13 @@ impl AuthenticationAgent {
                         ));
                     }
                 }
-                AuthenticationUserEvent::ProvidedPassword {
+                AuthenticationUserEvent::BeginAuthentication {
                     cookie: c,
                     username: user,
-                    password: pw,
+                    password,
                 } => {
                     if c == cookie {
+                        let mut initial_password = password.clone();
                         let mut stream = UnixStream::connect(self.config.get_socket_path()).await;
 
                         let (reader, mut writer): (
@@ -148,14 +149,62 @@ impl AuthenticationAgent {
                             tracing::debug!("helper stdout: {}", line);
                             if let Some(sliced) = line.strip_prefix("PAM_PROMPT_ECHO_OFF") {
                                 tracing::debug!("received request from helper: '{}'", sliced);
-                                if sliced.trim() == "Password:" {
+                                if sliced.trim().starts_with("Password") {
                                     tracing::debug!("helper replied with request for password");
-                                    writer.write_all(pw.as_bytes()).await?;
+                                    let password = if let Some(password) = initial_password.take() {
+                                        password
+                                    } else {
+                                        self.sender
+                                            .send(AuthenticationAgentEvent::PasswordRequested {
+                                                cookie: cookie.to_string(),
+                                                prompt: sliced.trim().to_string(),
+                                            })
+                                            .await
+                                            .map_err(|_| {
+                                                PolkitError::Failed(
+                                                    "Failed to request password from UI."
+                                                        .to_string(),
+                                                )
+                                            })?;
+                                        loop {
+                                            let response =
+                                                self.receiver.recv().await.ok_or_else(|| {
+                                                    PolkitError::Failed(
+                                                        "Password response channel closed."
+                                                            .to_string(),
+                                                    )
+                                                })?;
+                                            match &response {
+                                                AuthenticationUserEvent::ProvidedPassword {
+                                                    cookie: c,
+                                                    password,
+                                                } if c == cookie => break password.clone(),
+                                                AuthenticationUserEvent::Canceled { cookie: c }
+                                                    if c == cookie =>
+                                                {
+                                                    return Err(PolkitError::Cancelled(
+                                                        "User cancelled the authentication."
+                                                            .to_string(),
+                                                    ));
+                                                }
+                                                _ => continue,
+                                            }
+                                        }
+                                    };
+                                    writer.write_all(password.as_bytes()).await?;
                                     writer.write_all(b"\n").await?;
                                 }
                             } else if let Some(info) = line.strip_prefix("PAM_TEXT_INFO") {
                                 let msg = info.trim().to_string();
                                 tracing::debug!("helper replied with info: {}", msg);
+
+                                self.sender
+                                    .send(AuthenticationAgentEvent::StatusMessage {
+                                        cookie: cookie.to_string(),
+                                        message: msg.clone(),
+                                    })
+                                    .await
+                                    .unwrap();
 
                                 if msg.contains("minute") && msg.contains("unlock") {
                                     last_info = Some(msg.clone());
@@ -180,7 +229,7 @@ impl AuthenticationAgent {
                                     })
                                     .await
                                     .unwrap();
-                                continue;
+                                break;
                             } else if line.starts_with("SUCCESS") {
                                 tracing::debug!("helper replied with success.");
 
@@ -196,6 +245,7 @@ impl AuthenticationAgent {
                         writer.flush().await?;
                     }
                 }
+                AuthenticationUserEvent::ProvidedPassword { .. } => continue,
             }
         }
     }

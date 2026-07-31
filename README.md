@@ -91,6 +91,11 @@ This should place Soteria into ~/.cargo/bin and you can run it from there.
 
 Simply have your desktop run the `soteria` binary to have it register as your authentication agent. Once run, anytime an application requests polkit authentication, it should popup and prompt you to authenticate.
 
+Soteria starts the PAM conversation as soon as the dialog opens. Passwordless
+PAM modules such as fingerprint, face recognition, and smart-card providers can
+therefore authenticate immediately. The password field remains available as a
+fallback and is used only when PAM explicitly requests a password.
+
 For Hyprland, this would look like:
 
 ```conf
