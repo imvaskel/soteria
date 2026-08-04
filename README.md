@@ -112,6 +112,13 @@ The Biopass PAM module must also be present in the Polkit PAM stack (for
 example as `auth sufficient libbiopass_pam.so` in `/etc/pam.d/polkit-1`) for
 the biometric conversation to be offered.
 
+When a Polkit authentication is cancelled while a fingerprint scan is
+running, the socket-activated Polkit helper keeps the reader claimed until the
+PAM conversation finishes on its own. Soteria detects that the reader is still
+busy (via the fprintd D-Bus API, as a plain client) before starting a new
+biometric conversation and falls back to the password prompt instead of
+failing with "device in use".
+
 ### External themes
 
 Soteria loads `~/.config/soteria/style.css` by default. To keep a theme outside

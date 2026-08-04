@@ -264,17 +264,39 @@ impl AsyncComponent for App {
                             // installed. Without Biopass, skip the biometric
                             // path and wait for a password instead.
                             if crate::biopass::installed() {
-                                self.sender
-                                    .send(AuthenticationUserEvent::BeginAuthentication {
-                                        cookie: cookie.clone(),
-                                        username,
-                                        password: None,
-                                    })
-                                    .await
-                                    .unwrap();
-                                self.retry_message =
-                                    Some(gettext("Waiting for biometric authentication..."));
-                                self.authenticating = true;
+                                // A cancelled PAM conversation keeps the
+                                // fingerprint reader claimed until the root
+                                // helper finishes, so check that the reader is
+                                // actually free before starting another scan.
+                                // When it is busy, fall back to the password
+                                // prompt instead of failing with "device in use".
+                                let cookie = cookie.clone();
+                                let username = username.clone();
+                                let auth_sender = self.sender.clone();
+                                let busy =
+                                    crate::fprintd::fingerprint_device_busy_with_timeout().await;
+                                if self.cookie.as_ref() == Some(&cookie) {
+                                    if busy {
+                                        self.retry_message = Some(gettext(
+                                            "The fingerprint reader is busy. Please use your password.",
+                                        ));
+                                        self.authenticating = false;
+                                        self.awaiting_password = false;
+                                    } else {
+                                        auth_sender
+                                            .send(AuthenticationUserEvent::BeginAuthentication {
+                                                cookie,
+                                                username,
+                                                password: None,
+                                            })
+                                            .await
+                                            .unwrap();
+                                        self.retry_message = Some(gettext(
+                                            "Waiting for biometric authentication...",
+                                        ));
+                                        self.authenticating = true;
+                                    }
+                                }
                             }
                         }
                     }

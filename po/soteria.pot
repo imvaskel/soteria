@@ -28,3 +28,9 @@ msgstr ""
 
 msgid "Authentication failed. Please try again."
 msgstr ""
+
+msgid "Waiting for biometric authentication..."
+msgstr ""
+
+msgid "The fingerprint reader is busy. Please use your password."
+msgstr ""

@@ -25,6 +25,7 @@ mod config;
 mod constants;
 mod dbus;
 mod events;
+mod fprintd;
 mod theme;
 mod ui;
 
