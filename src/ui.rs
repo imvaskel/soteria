@@ -278,7 +278,7 @@ impl AsyncComponent for App {
                                 if self.cookie.as_ref() == Some(&cookie) {
                                     if busy {
                                         self.retry_message = Some(gettext(
-                                            "The fingerprint reader is busy. Please use your password.",
+                                            "The fingerprint reader is in use. Please enter your password.",
                                         ));
                                         self.authenticating = false;
                                         self.awaiting_password = false;

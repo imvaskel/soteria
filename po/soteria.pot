@@ -32,5 +32,5 @@ msgstr ""
 msgid "Waiting for biometric authentication..."
 msgstr ""
 
-msgid "The fingerprint reader is busy. Please use your password."
+msgid "The fingerprint reader is in use. Please enter your password."
 msgstr ""

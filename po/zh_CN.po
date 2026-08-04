@@ -29,9 +29,3 @@ msgstr "验证中..."
 
 msgid "Authentication failed. Please try again."
 msgstr "验证失败，请再试一次！"
-
-msgid "Waiting for biometric authentication..."
-msgstr "正在等待指纹验证..."
-
-msgid "The fingerprint reader is busy. Please use your password."
-msgstr "指纹设备正在释放，请使用密码登录。"
