@@ -145,7 +145,38 @@ impl AuthenticationAgent {
                         let mut last_info: Option<String> = None;
 
                         let mut lines = reader.lines();
-                        while let Some(line) = lines.next_line().await? {
+                        loop {
+                            let line = tokio::select! {
+                                line = lines.next_line() => match line {
+                                    Ok(Some(line)) => line,
+                                    Ok(None) => break,
+                                    Err(error) => return Err(error.into()),
+                                },
+                                event = self.receiver.recv() => {
+                                    match &event.ok_or_else(|| {
+                                        PolkitError::Failed(
+                                            "Failed to receive data. channel closed".to_string(),
+                                        )
+                                    })? {
+                                        AuthenticationUserEvent::Canceled { cookie: c }
+                                            if c == cookie =>
+                                        {
+                                            return Err(PolkitError::Cancelled(
+                                                "User cancelled the authentication.".to_string(),
+                                            ));
+                                        }
+                                        AuthenticationUserEvent::ProvidedPassword {
+                                            cookie: c,
+                                            password,
+                                        } if c == cookie => {
+                                            writer.write_all(password.as_bytes()).await?;
+                                            writer.write_all(b"\n").await?;
+                                        }
+                                        _ => {}
+                                    }
+                                    continue;
+                                }
+                            };
                             tracing::debug!("helper stdout: {}", line);
                             if let Some(sliced) = line.strip_prefix("PAM_PROMPT_ECHO_OFF") {
                                 tracing::debug!("received request from helper: '{}'", sliced);

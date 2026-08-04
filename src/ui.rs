@@ -276,6 +276,12 @@ impl AsyncComponent for App {
                 AuthenticationAgentEvent::Canceled { cookie } => {
                     if let Some(c) = &self.cookie {
                         if c == cookie {
+                            self.sender
+                                .send(AuthenticationUserEvent::Canceled {
+                                    cookie: cookie.clone(),
+                                })
+                                .await
+                                .unwrap();
                             self.cookie = None;
                             self.message = String::new();
                             self.identities = Vec::new();
