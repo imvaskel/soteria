@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use eyre::Result;
 use figment::{
@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub struct SystemConfig {
     helper_path: String,
     socket_path: String,
+    #[serde(default)]
+    style_path: Option<PathBuf>,
 }
 
 impl SystemConfig {
@@ -49,6 +51,10 @@ impl SystemConfig {
     pub fn get_socket_path(&self) -> &str {
         &self.socket_path
     }
+
+    pub fn get_style_path(&self) -> Option<&Path> {
+        self.style_path.as_deref()
+    }
 }
 
 impl Default for SystemConfig {
@@ -56,6 +62,7 @@ impl Default for SystemConfig {
         Self {
             helper_path: env!("POLKIT_AGENT_HELPER_PATH").into(),
             socket_path: env!("POLKIT_AGENT_SOCKET_PATH").into(),
+            style_path: None,
         }
     }
 }

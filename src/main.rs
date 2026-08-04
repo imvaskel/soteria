@@ -1,12 +1,15 @@
 use authority::{AuthorityProxy, Subject};
 use dbus::AuthenticationAgent;
-use eyre::{Result, WrapErr, ensure};
+use eyre::{ContextCompat, Result, WrapErr, ensure};
 use futures_lite::StreamExt;
 use gtk4::glib::{clone, spawn_future_local};
 use relm4::RelmApp;
 use std::collections::HashMap;
-use std::path::Path;
-use tokio::sync::mpsc::channel;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
+use tokio::sync::mpsc::{channel, unbounded_channel};
 use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
 
@@ -21,6 +24,7 @@ mod config;
 mod constants;
 mod dbus;
 mod events;
+mod theme;
 mod ui;
 
 use gettextrs::{bindtextdomain, textdomain};
@@ -44,6 +48,11 @@ fn setup_tracing() -> Result<()> {
 async fn main() -> Result<()> {
     setup_tracing()?;
 
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let Some(command) = theme::command_from_args(&args)? {
+        return theme::run_command(command).await;
+    }
+
     gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
 
     let locale_path = std::env::var("SOTERIA_LOCALEDIR")
@@ -52,13 +61,12 @@ async fn main() -> Result<()> {
     bindtextdomain("soteria", &locale_path)?;
     textdomain("soteria")?;
 
-    let config_path = std::env::var("XDG_CONFIG_HOME")
-        .or(std::env::var("HOME").map(|e| e + "/.config"))
-        .context("Could not resolve configuration path")?;
-    let css_path = format!("{config_path}/soteria/style.css");
-    let path = Path::new(&css_path);
-
     let config: SystemConfig = SystemConfig::from_file()?;
+    let css_path = config
+        .get_style_path()
+        .map(ToOwned::to_owned)
+        .map(Ok)
+        .unwrap_or_else(theme::default_style_path)?;
 
     let agent_helper = Path::new(config.get_helper_path());
     let agent_socket = Path::new(config.get_socket_path());
@@ -127,12 +135,51 @@ async fn main() -> Result<()> {
         }
     }));
 
+    let (theme_sender, mut theme_receiver) = unbounded_channel();
+    let current_style_path = Arc::new(Mutex::new(css_path.clone()));
+    let theme_control = theme::ThemeControl::new(current_style_path.clone(), theme_sender);
+    let _theme_connection = conn::Builder::session()?
+        .name(constants::THEME_BUS_NAME)?
+        .serve_at(constants::THEME_OBJECT_PATH, theme_control)?
+        .build()
+        .await?;
+
     let app = RelmApp::new("gay.vaskel.soteria");
-    if path.is_file() {
-        tracing::info!("loading css stylesheet from {}", css_path);
-        relm4::set_global_css_from_file(path)
-            .context("Could not load CSS stylesheet for some reason")?;
+    let css_provider = gtk4::CssProvider::new();
+    let display = gtk4::gdk::Display::default().context("Could not access GTK display")?;
+    gtk4::style_context_add_provider_for_display(
+        &display,
+        &css_provider,
+        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    if css_path.is_file() {
+        tracing::info!("loading css stylesheet from {}", css_path.display());
+        css_provider.load_from_path(&css_path);
     }
+    spawn_future_local(clone!(
+        #[strong]
+        css_provider,
+        #[strong]
+        current_style_path,
+        async move {
+            while let Some(request) = theme_receiver.recv().await {
+                let path = match request {
+                    theme::ThemeRequest::Reload => current_style_path
+                        .lock()
+                        .expect("theme path lock is poisoned")
+                        .clone(),
+                    theme::ThemeRequest::Load(path) => {
+                        *current_style_path
+                            .lock()
+                            .expect("theme path lock is poisoned") = path.clone();
+                        path
+                    }
+                };
+                tracing::info!("reloading css stylesheet from {}", path.display());
+                css_provider.load_from_path(path);
+            }
+        }
+    ));
     app.run_async::<App>((user_sender, agent_receiver));
 
     Ok(())

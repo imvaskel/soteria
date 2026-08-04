@@ -96,6 +96,32 @@ PAM modules such as fingerprint, face recognition, and smart-card providers can
 therefore authenticate immediately. The password field remains available as a
 fallback and is used only when PAM explicitly requests a password.
 
+### External themes
+
+Soteria loads `~/.config/soteria/style.css` by default. To keep a theme outside
+that directory, set an absolute path in `~/.config/soteria/config.toml`:
+
+```toml
+style_path = "/home/user/.local/share/themes/soteria/style.css"
+```
+
+The running agent exposes a per-user D-Bus theme controller through the
+`soteria` command:
+
+```bash
+# Print the stylesheet currently used by the running agent
+soteria theme path
+
+# Reload it after a theme generator changes the file
+soteria theme reload
+
+# Temporarily load another external stylesheet (until the agent restarts)
+soteria theme load /absolute/path/to/theme.css
+```
+
+This allows tools such as Matugen to update Soteria without modifying package
+files or restarting the authentication agent.
+
 For Hyprland, this would look like:
 
 ```conf
