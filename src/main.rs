@@ -20,6 +20,7 @@ use crate::events::{AuthenticationAgentEvent, AuthenticationUserEvent};
 use crate::ui::App;
 
 mod authority;
+mod biopass;
 mod config;
 mod constants;
 mod dbus;
@@ -62,6 +63,7 @@ async fn main() -> Result<()> {
     textdomain("soteria")?;
 
     let config: SystemConfig = SystemConfig::from_file()?;
+    tracing::info!("biopass biometric support: {}", biopass::installed());
     let css_path = config
         .get_style_path()
         .map(ToOwned::to_owned)

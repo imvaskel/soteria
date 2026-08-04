@@ -96,6 +96,22 @@ PAM modules such as fingerprint, face recognition, and smart-card providers can
 therefore authenticate immediately. The password field remains available as a
 fallback and is used only when PAM explicitly requests a password.
 
+### Biopass support
+
+[Biopass](https://github.com/tickstep/biopass) is an optional biometric
+provider that plugs into PAM through `libbiopass_pam.so`. Soteria detects it at
+runtime by checking for the PAM module and the `biopass-helper` binary:
+
+- **Biopass installed:** the dialog starts the PAM conversation immediately, so
+  Biopass face/fingerprint authentication runs before any password is
+  requested. The password field remains as a fallback.
+- **Biopass not installed:** the biometric path is skipped entirely and Soteria
+  behaves like a plain password prompt. No Biopass-related code runs.
+
+The Biopass PAM module must also be present in the Polkit PAM stack (for
+example as `auth sufficient libbiopass_pam.so` in `/etc/pam.d/polkit-1`) for
+the biometric conversation to be offered.
+
 ### External themes
 
 Soteria loads `~/.config/soteria/style.css` by default. To keep a theme outside

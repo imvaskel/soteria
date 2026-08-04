@@ -259,17 +259,23 @@ impl AsyncComponent for App {
                             .filter(|user| self.identities.contains(user))
                             .or_else(|| self.identities.first().cloned());
                         if let Some(username) = username {
-                            self.sender
-                                .send(AuthenticationUserEvent::BeginAuthentication {
-                                    cookie: cookie.clone(),
-                                    username,
-                                    password: None,
-                                })
-                                .await
-                                .unwrap();
-                            self.retry_message =
-                                Some(gettext("Waiting for biometric authentication..."));
-                            self.authenticating = true;
+                            // Biopass authenticates through the PAM stack, so
+                            // start the conversation immediately when it is
+                            // installed. Without Biopass, skip the biometric
+                            // path and wait for a password instead.
+                            if crate::biopass::installed() {
+                                self.sender
+                                    .send(AuthenticationUserEvent::BeginAuthentication {
+                                        cookie: cookie.clone(),
+                                        username,
+                                        password: None,
+                                    })
+                                    .await
+                                    .unwrap();
+                                self.retry_message =
+                                    Some(gettext("Waiting for biometric authentication..."));
+                                self.authenticating = true;
+                            }
                         }
                     }
                 }
