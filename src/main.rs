@@ -40,8 +40,7 @@ fn setup_tracing() -> Result<()> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     setup_tracing()?;
 
     gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
@@ -93,39 +92,46 @@ async fn main() -> Result<()> {
     let subject = Subject::new(subject_kind, subject_details);
 
     let agent = AuthenticationAgent::new(agent_sender, user_receiver, config.clone());
-    let connection = conn::Builder::system()?
-        .serve_at(constants::SELF_OBJECT_PATH, agent)?
-        .build()
-        .await?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let _connection = runtime.block_on(async {
+        let connection = conn::Builder::system()?
+            .serve_at(constants::SELF_OBJECT_PATH, agent)?
+            .build()
+            .await?;
 
-    let proxy = AuthorityProxy::new(&connection).await?;
-    proxy
-        .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
-        .await?;
+        let proxy = AuthorityProxy::new(&connection).await?;
+        proxy
+            .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
+            .await?;
 
-    tracing::info!("Registered as authentication agent.");
+        tracing::info!("Registered as authentication agent.");
 
-    let mut owner_change_signal = proxy
-        .inner()
-        .receive_owner_changed()
-        .await
-        .context("Could not get the signal for owner change?")?;
-    spawn_future_local(clone!(async move {
-        while let Some(result) = owner_change_signal.next().await {
-            // if we can get a UniqueName out of the stream, then polkit has restarted for some reason & we should reregister
-            if result.is_some() {
-                tracing::info!(
-                    "Polkit's owner has changed, assuming the process restarted and reregistering."
-                );
-                proxy
-                    .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
-                    .await
-                    .context("Somehow failed to reregister ourselves?")
-                    .unwrap();
-                tracing::info!("Reregistered as authentication agent.")
+        let mut owner_change_signal = proxy
+            .inner()
+            .receive_owner_changed()
+            .await
+            .context("Could not get the signal for owner change?")?;
+        spawn_future_local(clone!(async move {
+            while let Some(result) = owner_change_signal.next().await {
+                // if we can get a UniqueName out of the stream, then polkit has restarted for some reason & we should reregister
+                if result.is_some() {
+                    tracing::info!(
+                        "Polkit's owner has changed, assuming the process restarted and reregistering."
+                    );
+                    proxy
+                        .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
+                        .await
+                        .context("Somehow failed to reregister ourselves?")
+                        .unwrap();
+                    tracing::info!("Reregistered as authentication agent.")
+                }
             }
-        }
-    }));
+        }));
+
+        Ok::<_, eyre::Report>(connection)
+    })?;
 
     let app = RelmApp::new("gay.vaskel.soteria");
     if path.is_file() {
@@ -133,6 +139,9 @@ async fn main() -> Result<()> {
         relm4::set_global_css_from_file(path)
             .context("Could not load CSS stylesheet for some reason")?;
     }
+    // GTK runs outside block_on, so Tokio's cooperative budget is not held
+    // across the entire GTK main loop. The runtime stays available to tasks.
+    let _runtime_guard = runtime.enter();
     app.run_async::<App>((user_sender, agent_receiver));
 
     Ok(())
