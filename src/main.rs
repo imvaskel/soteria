@@ -1,4 +1,4 @@
-use authority::{AuthorityProxy, Subject};
+use authority::{AuthorityProxy, PolkitError, Subject};
 use dbus::AuthenticationAgent;
 use eyre::{Result, WrapErr, ensure};
 use futures_lite::StreamExt;
@@ -6,6 +6,7 @@ use gtk4::glib::{clone, spawn_future_local};
 use relm4::RelmApp;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Duration;
 use tokio::sync::mpsc::channel;
 use tracing::level_filters::LevelFilter;
 use zbus::zvariant::Value;
@@ -24,6 +25,27 @@ mod events;
 mod ui;
 
 use gettextrs::{bindtextdomain, textdomain};
+
+/// Upper bound for a single RegisterAuthenticationAgent attempt. polkitd can
+/// acquire its well-known name before it is ready to answer method calls, and
+/// a call landing in that window can hang indefinitely.
+const REREGISTER_TIMEOUT: Duration = Duration::from_secs(10);
+/// Initial delay before the first re-registration retry. The common failure
+/// mode (D-Bus proxy destination-name cache race after an owner change)
+/// resolves almost immediately, so start fast; a slow-recovery failure mode
+/// (polkitd stuck in initialization) is rare but real, hence plain
+/// exponential backoff (doubled after each failed attempt) up to the attempt
+/// limit: 0.25s, 0.5s, 1s, ... 128s, ~4.3min total.
+const REREGISTER_RETRY_DELAY_INITIAL: Duration = Duration::from_millis(250);
+/// Maximum attempts per owner-change event before giving up and waiting for
+/// the next event.
+const REREGISTER_MAX_ATTEMPTS: usize = 10;
+
+/// Result of racing a re-registration attempt against its timeout.
+enum ReregisterOutcome {
+    Done(Result<(), PolkitError>),
+    TimedOut,
+}
 
 fn setup_tracing() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
@@ -117,12 +139,69 @@ async fn main() -> Result<()> {
                 tracing::info!(
                     "Polkit's owner has changed, assuming the process restarted and reregistering."
                 );
-                proxy
-                    .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
-                    .await
-                    .context("Somehow failed to reregister ourselves?")
-                    .unwrap();
-                tracing::info!("Reregistered as authentication agent.")
+                // The registration call can hang forever when it lands in the
+                // window where polkitd already owns its well-known name but has
+                // not finished initializing (observed in the wild: one hung
+                // call permanently silenced the listener, and every later
+                // polkitd restart went unhandled until the agent was manually
+                // restarted). Race each attempt against a timeout and retry
+                // with a delay so a single bad window cannot disarm the agent.
+                // Plain exponential backoff, reset per owner-change event.
+                let mut retry_delay = REREGISTER_RETRY_DELAY_INITIAL;
+                for attempt in 1..=REREGISTER_MAX_ATTEMPTS {
+                    let call = proxy.register_authentication_agent(
+                        &subject,
+                        &locale,
+                        constants::SELF_OBJECT_PATH,
+                    );
+                    let timeout = gtk4::glib::timeout_future(REREGISTER_TIMEOUT);
+                    let outcome = futures_lite::future::race(
+                        async { ReregisterOutcome::Done(call.await) },
+                        async {
+                            timeout.await;
+                            ReregisterOutcome::TimedOut
+                        },
+                    )
+                    .await;
+                    match outcome {
+                        ReregisterOutcome::Done(Ok(())) => {
+                            tracing::info!(attempt, "Reregistered as authentication agent.");
+                            break;
+                        }
+                        // A previous timed-out attempt may have reached polkitd
+                        // after we stopped waiting; polkitd answers a duplicate
+                        // registration with "already exists", which means the
+                        // agent is registered and we are done.
+                        ReregisterOutcome::Done(Err(err))
+                            if err.to_string().contains("already exists") =>
+                        {
+                            tracing::info!(attempt, "Agent was already registered.");
+                            break;
+                        }
+                        ReregisterOutcome::Done(Err(err)) => {
+                            tracing::warn!(attempt, %err, "Failed to reregister.");
+                        }
+                        ReregisterOutcome::TimedOut => {
+                            tracing::warn!(attempt, "Reregistration attempt timed out.");
+                        }
+                    }
+                    if attempt < REREGISTER_MAX_ATTEMPTS {
+                        gtk4::glib::timeout_future(retry_delay).await;
+                        retry_delay = retry_delay.saturating_mul(2);
+                    } else {
+                        // We are a polkit authentication agent: without a
+                        // successful registration we cannot answer any auth
+                        // request. Exit so the service manager restarts us
+                        // with a clean registration instead of lingering as
+                        // a silent listener until the next polkit restart.
+                        tracing::error!(
+                            attempt,
+                            "Reregistration failed after {} attempts; exiting.",
+                            REREGISTER_MAX_ATTEMPTS
+                        );
+                        std::process::exit(1);
+                    }
+                }
             }
         }
     }));
