@@ -29,22 +29,110 @@ use gettextrs::{bindtextdomain, textdomain};
 /// Upper bound for a single RegisterAuthenticationAgent attempt. polkitd can
 /// acquire its well-known name before it is ready to answer method calls, and
 /// a call landing in that window can hang indefinitely.
-const REREGISTER_TIMEOUT: Duration = Duration::from_secs(10);
-/// Initial delay before the first re-registration retry. The common failure
+const REGISTER_TIMEOUT: Duration = Duration::from_secs(10);
+/// Initial delay before the first registration retry. The common failure
 /// mode (D-Bus proxy destination-name cache race after an owner change)
 /// resolves almost immediately, so start fast; a slow-recovery failure mode
 /// (polkitd stuck in initialization) is rare but real, hence plain
 /// exponential backoff (doubled after each failed attempt) up to the attempt
 /// limit: 0.25s, 0.5s, 1s, ... 128s, ~4.3min total.
-const REREGISTER_RETRY_DELAY_INITIAL: Duration = Duration::from_millis(250);
-/// Maximum attempts per owner-change event before giving up and waiting for
-/// the next event.
-const REREGISTER_MAX_ATTEMPTS: usize = 10;
+const REGISTER_RETRY_DELAY_INITIAL: Duration = Duration::from_millis(250);
+/// Maximum registration attempts (startup and re-registration alike) before
+/// giving up and exiting.
+const REGISTER_MAX_ATTEMPTS: usize = 10;
 
-/// Result of racing a re-registration attempt against its timeout.
-enum ReregisterOutcome {
+/// Timer backend for the registration helper. The two call sites run on
+/// different executors, and each must use its own executor's timer:
+/// main() runs on the tokio runtime before the GTK main loop starts, where
+/// glib::timeout_future panics on first poll (its SourceFuture asserts
+/// that the polling thread owns the MainContext); the re-registration
+/// future runs on the glib main context via spawn_future_local, where a
+/// tokio timer would only work by silently attaching to whatever runtime
+/// happens to be entered on the main thread (relm4 enters its own internal
+/// runtime around the GTK main loop) — an implementation detail this code
+/// should not depend on — so it uses the glib timer instead.
+enum RegisterTimer {
+    Tokio,
+    Glib,
+}
+
+impl RegisterTimer {
+    async fn sleep(&self, dur: Duration) {
+        match self {
+            RegisterTimer::Tokio => tokio::time::sleep(dur).await,
+            RegisterTimer::Glib => gtk4::glib::timeout_future(dur).await,
+        }
+    }
+}
+
+/// Result of racing a registration attempt against its timeout.
+enum RegisterOutcome {
     Done(Result<(), PolkitError>),
     TimedOut,
+}
+
+/// Register this authentication agent with polkitd, racing each attempt
+/// against a timeout and retrying with exponential backoff. Shared by the
+/// startup registration and the re-registration after a polkitd owner
+/// change: both call sites race the same window where polkitd already owns
+/// its well-known name but has not finished initializing, and a call landing
+/// there can hang indefinitely (observed in the wild: one hung
+/// re-registration permanently silenced the listener, and every later
+/// polkitd restart went unhandled until the agent was manually restarted).
+/// A previous timed-out attempt may still reach polkitd after we stopped
+/// waiting; polkitd answers a duplicate registration with "already exists",
+/// which therefore counts as success.
+async fn register_with_retry(
+    timer: RegisterTimer,
+    proxy: &AuthorityProxy<'static>,
+    subject: &Subject<'_>,
+    locale: &str,
+) {
+    let mut retry_delay = REGISTER_RETRY_DELAY_INITIAL;
+    for attempt in 1..=REGISTER_MAX_ATTEMPTS {
+        let call =
+            proxy.register_authentication_agent(subject, locale, constants::SELF_OBJECT_PATH);
+        let outcome =
+            futures_lite::future::race(async { RegisterOutcome::Done(call.await) }, async {
+                timer.sleep(REGISTER_TIMEOUT).await;
+                RegisterOutcome::TimedOut
+            })
+            .await;
+        match outcome {
+            RegisterOutcome::Done(Ok(())) => {
+                tracing::info!(attempt, "Registered as authentication agent.");
+                return;
+            }
+            // A previous timed-out attempt may have reached polkitd after we
+            // stopped waiting; polkitd answers a duplicate registration with
+            // "already exists", which means the agent is registered and we
+            // are done.
+            RegisterOutcome::Done(Err(err)) if err.to_string().contains("already exists") => {
+                tracing::info!(attempt, "Agent was already registered.");
+                return;
+            }
+            RegisterOutcome::Done(Err(err)) => {
+                tracing::warn!(attempt, %err, "Failed to register.");
+            }
+            RegisterOutcome::TimedOut => {
+                tracing::warn!(attempt, "Registration attempt timed out.");
+            }
+        }
+        if attempt < REGISTER_MAX_ATTEMPTS {
+            timer.sleep(retry_delay).await;
+            retry_delay = retry_delay.saturating_mul(2);
+        }
+    }
+    // We are a polkit authentication agent: without a successful
+    // registration we cannot answer any auth request. Exit so the service
+    // manager restarts us with a clean registration instead of lingering as
+    // a process that cannot do its job.
+    tracing::error!(
+        attempt = REGISTER_MAX_ATTEMPTS,
+        "Registration failed after {} attempts; exiting.",
+        REGISTER_MAX_ATTEMPTS
+    );
+    std::process::exit(1);
 }
 
 fn setup_tracing() -> Result<()> {
@@ -121,11 +209,11 @@ async fn main() -> Result<()> {
         .await?;
 
     let proxy = AuthorityProxy::new(&connection).await?;
-    proxy
-        .register_authentication_agent(&subject, &locale, constants::SELF_OBJECT_PATH)
-        .await?;
-
-    tracing::info!("Registered as authentication agent.");
+    // Same exposure as the re-registration below: if soteria starts while
+    // polkitd is mid-restart, the call can hang in the same window (or fail
+    // while logind/polkitd state is still settling) and the agent never
+    // comes up.
+    register_with_retry(RegisterTimer::Tokio, &proxy, &subject, &locale).await;
 
     let mut owner_change_signal = proxy
         .inner()
@@ -139,69 +227,7 @@ async fn main() -> Result<()> {
                 tracing::info!(
                     "Polkit's owner has changed, assuming the process restarted and reregistering."
                 );
-                // The registration call can hang forever when it lands in the
-                // window where polkitd already owns its well-known name but has
-                // not finished initializing (observed in the wild: one hung
-                // call permanently silenced the listener, and every later
-                // polkitd restart went unhandled until the agent was manually
-                // restarted). Race each attempt against a timeout and retry
-                // with a delay so a single bad window cannot disarm the agent.
-                // Plain exponential backoff, reset per owner-change event.
-                let mut retry_delay = REREGISTER_RETRY_DELAY_INITIAL;
-                for attempt in 1..=REREGISTER_MAX_ATTEMPTS {
-                    let call = proxy.register_authentication_agent(
-                        &subject,
-                        &locale,
-                        constants::SELF_OBJECT_PATH,
-                    );
-                    let timeout = gtk4::glib::timeout_future(REREGISTER_TIMEOUT);
-                    let outcome = futures_lite::future::race(
-                        async { ReregisterOutcome::Done(call.await) },
-                        async {
-                            timeout.await;
-                            ReregisterOutcome::TimedOut
-                        },
-                    )
-                    .await;
-                    match outcome {
-                        ReregisterOutcome::Done(Ok(())) => {
-                            tracing::info!(attempt, "Reregistered as authentication agent.");
-                            break;
-                        }
-                        // A previous timed-out attempt may have reached polkitd
-                        // after we stopped waiting; polkitd answers a duplicate
-                        // registration with "already exists", which means the
-                        // agent is registered and we are done.
-                        ReregisterOutcome::Done(Err(err))
-                            if err.to_string().contains("already exists") =>
-                        {
-                            tracing::info!(attempt, "Agent was already registered.");
-                            break;
-                        }
-                        ReregisterOutcome::Done(Err(err)) => {
-                            tracing::warn!(attempt, %err, "Failed to reregister.");
-                        }
-                        ReregisterOutcome::TimedOut => {
-                            tracing::warn!(attempt, "Reregistration attempt timed out.");
-                        }
-                    }
-                    if attempt < REREGISTER_MAX_ATTEMPTS {
-                        gtk4::glib::timeout_future(retry_delay).await;
-                        retry_delay = retry_delay.saturating_mul(2);
-                    } else {
-                        // We are a polkit authentication agent: without a
-                        // successful registration we cannot answer any auth
-                        // request. Exit so the service manager restarts us
-                        // with a clean registration instead of lingering as
-                        // a silent listener until the next polkit restart.
-                        tracing::error!(
-                            attempt,
-                            "Reregistration failed after {} attempts; exiting.",
-                            REREGISTER_MAX_ATTEMPTS
-                        );
-                        std::process::exit(1);
-                    }
-                }
+                register_with_retry(RegisterTimer::Glib, &proxy, &subject, &locale).await;
             }
         }
     }));
